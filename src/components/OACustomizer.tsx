@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { saveSessionLocal } from '@/lib/sessionStore';
 import { useOACredit, getUserCredits } from '@/lib/userCredits';
+import RazorpayPayButton from './RazorpayPayButton';
 import { CreditCard, FilePlus, AlertCircle, Sparkles } from 'lucide-react';
 
 export default function OACustomizer() {
@@ -723,23 +724,21 @@ export default function OACustomizer() {
                   <div className="flex items-center justify-between font-bold text-white">
                     <span className="flex items-center gap-1.5">
                       <CreditCard className="h-4 w-4 text-amber-400" />
-                      Option A: Buy OA Passes via Razorpay
+                      Option A: 3 Months Unlimited Pass
                     </span>
-                    <span className="text-amber-400">From ₹49</span>
+                    <span className="text-amber-400">₹99</span>
                   </div>
                   <p className="text-zinc-400 text-[11px]">
-                    Instant activation. Single pass (₹49) or Pro 5-pack (₹199).
+                    Instant activation for 3 months unlimited assessment creation.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowNoCreditsModal(false);
-                      router.push('/pricing');
-                    }}
-                    className="w-full mt-1 py-2 rounded bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs"
-                  >
-                    View Pricing & Buy via Razorpay
-                  </button>
+                  <RazorpayPayButton
+                    planId="unlimited_3months_99"
+                    amount={99}
+                    credits={999}
+                    planName="3 Months Unlimited Pro Pass"
+                    buttonText="Pay ₹99 & Unlock 3 Months Pass"
+                    className="w-full mt-1 py-2 rounded bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-1.5"
+                  />
                 </div>
 
                 {/* Option 2: Contribute 3 Questions */}
