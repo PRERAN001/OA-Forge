@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionServer, saveSessionServer } from '@/lib/sessionStore';
+import { saveOASessionToDB, getOASessionFromDB } from '@/lib/dbServices';
 import { OASession, Submission } from '@/types/oa';
 
 export async function GET(
@@ -7,7 +8,11 @@ export async function GET(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   const { sessionId } = await params;
-  const session = getSessionServer(sessionId);
+  let session = getSessionServer(sessionId);
+
+  if (!session) {
+    session = (await getOASessionFromDB(sessionId)) || undefined;
+  }
 
   if (!session) {
     return NextResponse.json({ error: 'Session not found' }, { status: 404 });
@@ -27,7 +32,10 @@ export async function POST(
   let session = getSessionServer(sessionId);
 
   if (!session) {
-    // If not in server memory, client can send session payload to sync
+    session = (await getOASessionFromDB(sessionId)) || undefined;
+  }
+
+  if (!session) {
     if (body.sessionData) {
       session = body.sessionData as OASession;
     } else {
@@ -41,13 +49,10 @@ export async function POST(
       return NextResponse.json({ error: 'Question not found' }, { status: 400 });
     }
 
-    // Mock evaluation of code: if code is non-empty and has structure, simulate sample test passes
     const code = submission.code || '';
     const hasCode = code.trim().length > 15;
-    
-    // Evaluate sample input/output test cases
+
     const testResults = (question.inputOutput || []).map((io) => {
-      // Mock test pass: if user wrote valid code block
       const passed = hasCode && !code.includes('raise NotImplementedError') && !code.includes('pass');
       return {
         passed,
@@ -73,13 +78,13 @@ export async function POST(
 
     session.submissions[questionId] = fullSubmission;
 
-    // Recalculate total score
     session.totalScore = Object.values(session.submissions).reduce(
       (sum, sub) => sum + (sub.score || 0),
       0
     );
 
     saveSessionServer(session);
+    await saveOASessionToDB(session);
 
     return NextResponse.json({
       message: 'Question submitted successfully',
@@ -91,14 +96,14 @@ export async function POST(
   if (finishAssessment) {
     session.status = 'completed';
     session.completedAt = new Date().toISOString();
-    
-    // Calculate final score across all questions
+
     session.totalScore = Object.values(session.submissions).reduce(
       (sum, sub) => sum + (sub.score || 0),
       0
     );
 
     saveSessionServer(session);
+    await saveOASessionToDB(session);
 
     return NextResponse.json({
       message: 'Assessment completed successfully',

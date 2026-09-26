@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { recordPaymentToDB } from '@/lib/dbServices';
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,12 +10,12 @@ export async function POST(request: NextRequest) {
       razorpay_signature,
       planId,
       credits,
+      userEmail,
     } = await request.json();
 
     const key_secret = process.env.RAZORPAY_KEY_SECRET;
 
     if (key_secret && razorpay_signature) {
-      // Verify HMAC SHA256 signature from Razorpay
       const body = razorpay_order_id + '|' + razorpay_payment_id;
       const expectedSignature = crypto
         .createHmac('sha256', key_secret)
@@ -22,6 +23,16 @@ export async function POST(request: NextRequest) {
         .digest('hex');
 
       if (expectedSignature !== razorpay_signature) {
+        await recordPaymentToDB({
+          orderId: razorpay_order_id,
+          paymentId: razorpay_payment_id,
+          userEmail,
+          planId: planId || 'unlimited_3months_99',
+          amount: 99,
+          credits: credits || 999,
+          status: 'failed',
+        });
+
         return NextResponse.json(
           { error: 'Payment signature verification failed.' },
           { status: 400 }
@@ -29,13 +40,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Return successful verification payload
+    await recordPaymentToDB({
+      orderId: razorpay_order_id,
+      paymentId: razorpay_payment_id || `pay_mock_${Date.now()}`,
+      userEmail,
+      planId: planId || 'unlimited_3months_99',
+      amount: 99,
+      credits: credits || 999,
+      status: 'verified',
+    });
+
     return NextResponse.json({
       status: 'success',
       orderId: razorpay_order_id,
       paymentId: razorpay_payment_id || `pay_mock_${Date.now()}`,
       planId,
-      creditsAdded: credits || 1,
+      creditsAdded: credits || 999,
       verifiedAt: new Date().toISOString(),
     });
   } catch (error: any) {

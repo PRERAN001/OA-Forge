@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRandomizedQuestions, filterQuestions } from '@/lib/questions';
 import { OASession, OAFilterConfig, Question } from '@/types/oa';
 import { saveSessionServer } from '@/lib/sessionStore';
+import { saveOASessionToDB } from '@/lib/dbServices';
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,6 +56,7 @@ export async function POST(request: NextRequest) {
     };
 
     saveSessionServer(session);
+    await saveOASessionToDB(session);
 
     return NextResponse.json({
       sessionId: session.id,

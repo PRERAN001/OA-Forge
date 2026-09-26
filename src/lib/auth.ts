@@ -1,5 +1,6 @@
 import { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
+import { syncUserWithMongoDB } from './dbServices';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -16,6 +17,10 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session?.user) {
         (session.user as any).id = token.sub;
+        if (session.user.email) {
+          // Sync logged-in user with MongoDB database
+          syncUserWithMongoDB(session.user.email, session.user.name || undefined, session.user.image || undefined);
+        }
       }
       return session;
     },
