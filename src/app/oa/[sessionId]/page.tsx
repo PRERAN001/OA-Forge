@@ -4,6 +4,10 @@ import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { OASession, Question, Submission } from '@/types/oa';
 import { getSessionLocal, saveSessionLocal } from '@/lib/sessionStore';
+<<<<<<< HEAD
+import { getStarterTemplate } from '@/lib/starterTemplates';
+=======
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
 import DifficultyBadge from '@/components/DifficultyBadge';
 import CodeEditor from '@/components/CodeEditor';
 import Timer from '@/components/Timer';
@@ -23,6 +27,10 @@ import {
   Check,
   X,
   RefreshCw,
+<<<<<<< HEAD
+  Lock,
+=======
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
 } from 'lucide-react';
 
 export default function TakeOAPage({
@@ -71,14 +79,38 @@ export default function TakeOAPage({
 
       if (sess) {
         setSession(sess);
+<<<<<<< HEAD
+        // Initialize starter code for each question from localStorage or templates
+=======
         // Initialize starter code for each question if no submission exists yet
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
         const initialCode: Record<number, string> = {};
         const initialLang: Record<number, string> = {};
 
         sess.questions.forEach((q) => {
           const existing = sess.submissions[q.id];
+<<<<<<< HEAD
+          const savedLang = typeof window !== 'undefined'
+            ? localStorage.getItem(`oaforge_lang_${sessionId}_${q.id}`)
+            : null;
+          const lang = savedLang || (existing ? existing.language : 'python');
+          initialLang[q.id] = lang;
+
+          const savedCode = typeof window !== 'undefined'
+            ? localStorage.getItem(`oaforge_code_${sessionId}_${q.id}_${lang}`)
+            : null;
+
+          if (savedCode !== null) {
+            initialCode[q.id] = savedCode;
+          } else if (existing && existing.language === lang) {
+            initialCode[q.id] = existing.code;
+          } else {
+            initialCode[q.id] = getStarterTemplate(q, lang);
+          }
+=======
           initialCode[q.id] = existing ? existing.code : q.starterCode || '';
           initialLang[q.id] = existing ? existing.language : 'python';
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
         });
 
         setCodeMap(initialCode);
@@ -126,6 +158,115 @@ export default function TakeOAPage({
 
   const handleCodeChange = (val: string) => {
     setCodeMap((prev) => ({ ...prev, [currentQuestion.id]: val }));
+<<<<<<< HEAD
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`oaforge_code_${sessionId}_${currentQuestion.id}_${currentLanguage}`, val);
+      } catch (e) {}
+    }
+  };
+
+  const handleLanguageChange = (newLang: string) => {
+    // 1. Persist current code for current language in localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`oaforge_code_${sessionId}_${currentQuestion.id}_${currentLanguage}`, currentCode);
+        localStorage.setItem(`oaforge_lang_${sessionId}_${currentQuestion.id}`, newLang);
+      } catch (e) {}
+    }
+
+    // 2. Fetch previously saved code for newLang from localStorage
+    let nextCode: string | null = null;
+    if (typeof window !== 'undefined') {
+      nextCode = localStorage.getItem(`oaforge_code_${sessionId}_${currentQuestion.id}_${newLang}`);
+    }
+
+    // 3. Fallback to existing submission if in newLang, or newLang's starter template
+    if (nextCode === null) {
+      if (currentSubmission && currentSubmission.language === newLang) {
+        nextCode = currentSubmission.code;
+      } else {
+        nextCode = getStarterTemplate(currentQuestion, newLang);
+      }
+    }
+
+    // 4. Update state
+    setLanguageMap((prev) => ({ ...prev, [currentQuestion.id]: newLang }));
+    setCodeMap((prev) => ({ ...prev, [currentQuestion.id]: nextCode! }));
+  };
+
+  const switchQuestion = (newIdx: number) => {
+    if (newIdx === activeQuestionIndex) return;
+
+    // 1. Save current question's code to localStorage before navigating
+    if (typeof window !== 'undefined' && currentQuestion) {
+      try {
+        localStorage.setItem(`oaforge_code_${sessionId}_${currentQuestion.id}_${currentLanguage}`, currentCode);
+      } catch (e) {}
+    }
+
+    // 2. Look up destination question
+    const destQuestion = session?.questions[newIdx];
+    if (destQuestion) {
+      const savedLang = typeof window !== 'undefined'
+        ? localStorage.getItem(`oaforge_lang_${sessionId}_${destQuestion.id}`)
+        : null;
+      const targetLang = savedLang || languageMap[destQuestion.id] || (session?.submissions[destQuestion.id]?.language) || 'python';
+
+      const savedCode = typeof window !== 'undefined'
+        ? localStorage.getItem(`oaforge_code_${sessionId}_${destQuestion.id}_${targetLang}`)
+        : null;
+
+      let targetCode: string;
+      if (savedCode !== null) {
+        targetCode = savedCode;
+      } else if (session?.submissions[destQuestion.id] && session.submissions[destQuestion.id].language === targetLang) {
+        targetCode = session.submissions[destQuestion.id].code;
+      } else if (codeMap[destQuestion.id] && languageMap[destQuestion.id] === targetLang) {
+        targetCode = codeMap[destQuestion.id];
+      } else {
+        targetCode = getStarterTemplate(destQuestion, targetLang);
+      }
+
+      setLanguageMap((prev) => ({ ...prev, [destQuestion.id]: targetLang }));
+      setCodeMap((prev) => ({ ...prev, [destQuestion.id]: targetCode }));
+    }
+
+    setActiveQuestionIndex(newIdx);
+    setTestOutput(null);
+    setLeftTab('problem');
+  };
+
+  // Run Sample Test Cases
+    const handleRunSampleTests = async () => {
+    setIsRunningTests(true);
+    setLeftTab('console');
+
+    try {
+      const res = await fetch('/api/oa/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionId: currentQuestion.id,
+          code: currentCode,
+          language: currentLanguage,
+        }),
+      });
+
+      const data = await res.json();
+      setTestOutput(data);
+    } catch (e) {
+      setTestOutput({
+        status: 'ERROR',
+        results: [],
+        runtime: '0 ms',
+        memory: '0 MB',
+        error: 'Network error connecting to assessment server',
+      });
+    } finally {
+      setIsRunningTests(false);
+    }
+=======
   };
 
   const handleLanguageChange = (lang: string) => {
@@ -165,6 +306,7 @@ export default function TakeOAPage({
 
       setIsRunningTests(false);
     }, 600);
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
   };
 
   // Submit Code for Current Question
@@ -192,8 +334,17 @@ export default function TakeOAPage({
         setSession(data.session);
         saveSessionLocal(data.session);
 
+<<<<<<< HEAD
+        if (data.execution) {
+          setTestOutput(data.execution);
+          setLeftTab('console');
+        } else {
+          handleRunSampleTests();
+        }
+=======
         // Run tests visually as well
         handleRunSampleTests();
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
       }
     } catch (e) {
       console.error('Error submitting code', e);
@@ -256,11 +407,15 @@ export default function TakeOAPage({
               return (
                 <button
                   key={q.id}
+<<<<<<< HEAD
+                  onClick={() => switchQuestion(idx)}
+=======
                   onClick={() => {
                     setActiveQuestionIndex(idx);
                     setTestOutput(null);
                     setLeftTab('problem');
                   }}
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
                   className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-mono font-medium transition ${
                     isActive
                       ? 'bg-amber-500 text-zinc-950 font-bold shadow'
@@ -388,7 +543,11 @@ export default function TakeOAPage({
                       Sample Examples
                     </h3>
                     <div className="space-y-3">
+<<<<<<< HEAD
+                      {currentQuestion.inputOutput.slice(0, 3).map((io, i) => (
+=======
                       {currentQuestion.inputOutput.map((io, i) => (
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
                         <div
                           key={i}
                           className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3.5 space-y-2 font-mono text-xs"
@@ -436,13 +595,84 @@ export default function TakeOAPage({
                   </div>
                 ) : (
                   <div className="space-y-3">
+<<<<<<< HEAD
+                    {testOutput.error && (
+                      <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300 font-mono whitespace-pre-wrap">
+                        <div className="font-bold text-rose-400 mb-1 flex items-center gap-1.5">
+                          <AlertCircle className="h-4 w-4 text-rose-400" />
+                          Execution / Runtime Error:
+                        </div>
+                        {testOutput.error}
+                      </div>
+                    )}
+
+                    <div
+                      className={`rounded-lg border p-3 text-xs font-bold flex items-center justify-between ${
+=======
                     <div
                       className={`rounded-lg border p-3 text-xs font-bold flex items-center gap-2 ${
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
                         testOutput.status === 'PASSED'
                           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                           : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
                       }`}
                     >
+<<<<<<< HEAD
+                      <div className="flex items-center gap-2">
+                        {testOutput.status === 'PASSED' ? (
+                          <>
+                            <CheckCircle2 className="h-4 w-4" />
+                            All {testOutput.totalTests || testOutput.results.length} Test Cases Passed!
+                          </>
+                        ) : (
+                          <>
+                            <AlertCircle className="h-4 w-4" />
+                            {testOutput.status === 'ERROR' ? 'Execution Error' : 'Test Execution Mismatch'}
+                          </>
+                        )}
+                      </div>
+                      <span className="font-mono text-xs font-bold">
+                        {testOutput.totalPassed !== undefined
+                          ? testOutput.totalPassed
+                          : testOutput.results.filter((r: any) => r.passed).length}{' '}
+                        / {testOutput.totalTests || testOutput.results.length} Passed
+                      </span>
+                    </div>
+
+                    {/* Hidden Test Cases Summary Card (Only shown during submission when hidden tests exist) */}
+                    {testOutput.hiddenStats && testOutput.hiddenStats.total > 0 && (
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/90 p-3.5 text-xs space-y-2 font-mono">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-zinc-300 font-bold">
+                            <Lock className="h-3.5 w-3.5 text-amber-400" />
+                            <span>Hidden Test Cases</span>
+                            <span className="text-[10px] text-zinc-500 font-normal font-sans">
+                              ({testOutput.hiddenStats.total} private test cases)
+                            </span>
+                          </div>
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                              testOutput.hiddenStats.allPassed
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                            }`}
+                          >
+                            {testOutput.hiddenStats.passed} / {testOutput.hiddenStats.total} PASSED
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-zinc-400 font-sans leading-relaxed">
+                          {testOutput.hiddenStats.allPassed
+                            ? 'All hidden test cases passed successfully.'
+                            : 'Some hidden test cases failed. Inputs and outputs are kept private to evaluate algorithmic correctness on edge cases.'}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider px-1 pt-1">
+                        Sample Cases ({testOutput.results.length})
+                      </div>
+=======
                       {testOutput.status === 'PASSED' ? (
                         <>
                           <CheckCircle2 className="h-4 w-4" />
@@ -457,13 +687,18 @@ export default function TakeOAPage({
                     </div>
 
                     <div className="space-y-2">
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
                       {testOutput.results.map((res: any) => (
                         <div
                           key={res.id}
                           className="rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-xs space-y-1.5"
                         >
                           <div className="flex items-center justify-between">
+<<<<<<< HEAD
+                            <span className="text-zinc-400 font-bold">Sample Case {res.id}</span>
+=======
                             <span className="text-zinc-400 font-bold">Case {res.id}</span>
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
                             <span
                               className={`text-[10px] px-2 py-0.5 rounded font-bold ${
                                 res.passed
@@ -504,7 +739,11 @@ export default function TakeOAPage({
             <CodeEditor
               value={currentCode}
               onChange={handleCodeChange}
+<<<<<<< HEAD
+              starterCode={getStarterTemplate(currentQuestion, currentLanguage)}
+=======
               starterCode={currentQuestion.starterCode}
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
               language={currentLanguage}
               onLanguageChange={handleLanguageChange}
             />
@@ -516,7 +755,11 @@ export default function TakeOAPage({
               <button
                 type="button"
                 onClick={() =>
+<<<<<<< HEAD
+                  switchQuestion(Math.max(0, activeQuestionIndex - 1))
+=======
                   setActiveQuestionIndex((prev) => Math.max(0, prev - 1))
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
                 }
                 disabled={activeQuestionIndex === 0}
                 className="flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 disabled:opacity-40"
@@ -528,9 +771,13 @@ export default function TakeOAPage({
               <button
                 type="button"
                 onClick={() =>
+<<<<<<< HEAD
+                  switchQuestion(Math.min(session.questions.length - 1, activeQuestionIndex + 1))
+=======
                   setActiveQuestionIndex((prev) =>
                     Math.min(session.questions.length - 1, prev + 1)
                   )
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
                 }
                 disabled={activeQuestionIndex === session.questions.length - 1}
                 className="flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 disabled:opacity-40"

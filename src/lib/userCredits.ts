@@ -54,7 +54,17 @@ export function getUserCredits(): UserCreditsState {
       localStorage.setItem(CREDITS_STORAGE_KEY, JSON.stringify(initial));
       return initial;
     }
+<<<<<<< HEAD
+    const parsed: UserCreditsState = JSON.parse(raw);
+    // Ensure the user always has at least 1 credit so they are never blocked from taking an assessment
+    if (parsed.credits < 1 && !parsed.isUnlimited) {
+      parsed.credits = 1;
+      saveUserCredits(parsed);
+    }
+    return parsed;
+=======
     return JSON.parse(raw);
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
   } catch (e) {
     return {
       credits: 1,
@@ -65,6 +75,28 @@ export function getUserCredits(): UserCreditsState {
   }
 }
 
+<<<<<<< HEAD
+export function resetUserCredits(amount = 1): UserCreditsState {
+  const state: UserCreditsState = {
+    credits: amount,
+    contributedCount: 0,
+    isUnlimited: false,
+    history: [
+      {
+        id: 'reset_' + Date.now(),
+        type: 'free_initial',
+        amount,
+        description: 'Free Assessment Credit Refilled',
+        timestamp: new Date().toISOString(),
+      },
+    ],
+  };
+  saveUserCredits(state);
+  return state;
+}
+
+=======
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
 export function saveUserCredits(state: UserCreditsState): void {
   if (typeof window === 'undefined') return;
   try {
@@ -82,6 +114,12 @@ export function useOACredit(): { success: boolean; message: string; remainingCre
   }
 
   if (state.credits <= 0) {
+<<<<<<< HEAD
+    state.credits = 1;
+  }
+
+  state.credits = Math.max(0, state.credits - 1);
+=======
     return {
       success: false,
       message: 'You have 0 OA credits remaining. Purchase ₹99 Unlimited Pass or contribute 3 questions to unlock!',
@@ -90,6 +128,7 @@ export function useOACredit(): { success: boolean; message: string; remainingCre
   }
 
   state.credits -= 1;
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
   saveUserCredits(state);
   return { success: true, message: '1 Credit Used', remainingCredits: state.credits };
 }

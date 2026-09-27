@@ -24,8 +24,12 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { saveSessionLocal } from '@/lib/sessionStore';
+<<<<<<< HEAD
+import { useOACredit, getUserCredits, resetUserCredits } from '@/lib/userCredits';
+=======
 import { useOACredit, getUserCredits } from '@/lib/userCredits';
 import RazorpayPayButton from './RazorpayPayButton';
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
 import { CreditCard, FilePlus, AlertCircle, Sparkles } from 'lucide-react';
 
 export default function OACustomizer() {
@@ -724,6 +728,25 @@ export default function OACustomizer() {
                   <div className="flex items-center justify-between font-bold text-white">
                     <span className="flex items-center gap-1.5">
                       <CreditCard className="h-4 w-4 text-amber-400" />
+<<<<<<< HEAD
+                      Option A: Buy OA Passes via Razorpay
+                    </span>
+                    <span className="text-amber-400">From ₹49</span>
+                  </div>
+                  <p className="text-zinc-400 text-[11px]">
+                    Instant activation. Single pass (₹49) or Pro 5-pack (₹199).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNoCreditsModal(false);
+                      router.push('/pricing');
+                    }}
+                    className="w-full mt-1 py-2 rounded bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs"
+                  >
+                    View Pricing & Buy via Razorpay
+                  </button>
+=======
                       Option A: 3 Months Unlimited Pass
                     </span>
                     <span className="text-amber-400">₹99</span>
@@ -739,6 +762,7 @@ export default function OACustomizer() {
                     buttonText="Pay ₹99 & Unlock 3 Months Pass"
                     className="w-full mt-1 py-2 rounded bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-1.5"
                   />
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
                 </div>
 
                 {/* Option 2: Contribute 3 Questions */}
@@ -764,6 +788,24 @@ export default function OACustomizer() {
                     Contribute Questions (+1 Free OA)
                   </button>
                 </div>
+<<<<<<< HEAD
+
+                {/* Instant Refill for Development & Testing */}
+                <div className="pt-2 text-center border-t border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetUserCredits(1);
+                      setShowNoCreditsModal(false);
+                      handleStartOA();
+                    }}
+                    className="text-xs text-amber-400 hover:text-amber-300 font-medium underline font-mono"
+                  >
+                    ⚡ Refill 1 Assessment Credit & Start OA
+                  </button>
+                </div>
+=======
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
               </div>
             </div>
           </div>

@@ -3,6 +3,13 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+<<<<<<< HEAD
+import { getUserCredits } from '@/lib/userCredits';
+import { Zap, BookOpen, Trophy, Plus, FilePlus, CreditCard, Sparkles } from 'lucide-react';
+
+export default function Navbar() {
+  const pathname = usePathname();
+=======
 import { useSession, signOut, signIn } from 'next-auth/react';
 import { getUserCredits } from '@/lib/userCredits';
 import {
@@ -21,6 +28,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const { data: session, status } = useSession();
 
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
   const [credits, setCredits] = useState<number | null>(null);
   const [isUnlimited, setIsUnlimited] = useState(false);
 
@@ -107,6 +115,8 @@ export default function Navbar() {
             <Plus className="h-4 w-4" />
             New OA
           </Link>
+<<<<<<< HEAD
+=======
 
           {/* User Profile / Auth State */}
           {status === 'authenticated' && session.user ? (
@@ -139,6 +149,7 @@ export default function Navbar() {
               Sign In
             </button>
           )}
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
         </div>
       </div>
     </header>

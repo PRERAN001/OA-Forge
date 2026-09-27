@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionServer, saveSessionServer } from '@/lib/sessionStore';
 import { saveOASessionToDB, getOASessionFromDB } from '@/lib/dbServices';
 import { OASession, Submission } from '@/types/oa';
+import { executeOnJudge0 } from '@/lib/judge0';
 
 export async function GET(
   request: NextRequest,
@@ -50,22 +51,22 @@ export async function POST(
     }
 
     const code = submission.code || '';
-    const hasCode = code.trim().length > 15;
+    const lang = submission.language || 'python';
+    const testCases = question.inputOutput || [];
 
-    const testResults = (question.inputOutput || []).map((io) => {
-      const passed = hasCode && !code.includes('raise NotImplementedError') && !code.includes('pass');
-      return {
-        passed,
-        input: io.input,
-        expected: io.output,
-        actual: passed ? io.output : 'Null / Output mismatch',
-      };
-    });
+    const execResult = await executeOnJudge0(code, question.entryPoint, testCases, lang);
 
+    const testResults = execResult.results || [];
     const passedCount = testResults.filter((r) => r.passed).length;
-    const totalTests = testResults.length || 1;
+    const totalTests = testCases.length || 1;
     const scoreFraction = passedCount / totalTests;
     const score = Math.round(question.points * scoreFraction);
+
+    const SAMPLE_LIMIT = 3;
+    const sampleResults = testResults.slice(0, SAMPLE_LIMIT);
+    const hiddenResults = testResults.slice(SAMPLE_LIMIT);
+    const hiddenTotal = hiddenResults.length;
+    const hiddenPassed = hiddenResults.filter((r) => r.passed).length;
 
     const fullSubmission: Submission = {
       code,
@@ -73,7 +74,20 @@ export async function POST(
       submittedAt: new Date().toISOString(),
       status: 'submitted',
       score,
-      testResults,
+      testResults: [
+        ...sampleResults.map((r) => ({
+          passed: r.passed,
+          input: r.input,
+          expected: r.expected,
+          actual: r.actual,
+        })),
+        ...hiddenResults.map((r) => ({
+          passed: r.passed,
+          input: '[Hidden Test Case]',
+          expected: '[Hidden Output]',
+          actual: r.passed ? '[Passed]' : '[Failed]',
+        })),
+      ],
     };
 
     session.submissions[questionId] = fullSubmission;
@@ -86,9 +100,25 @@ export async function POST(
     saveSessionServer(session);
     await saveOASessionToDB(session);
 
+    const clientExecution = {
+      status: execResult.status,
+      runtime: execResult.runtime,
+      memory: execResult.memory,
+      error: execResult.error,
+      results: sampleResults,
+      hiddenStats: {
+        total: hiddenTotal,
+        passed: hiddenPassed,
+        allPassed: hiddenPassed === hiddenTotal,
+      },
+      totalTests,
+      totalPassed: passedCount,
+    };
+
     return NextResponse.json({
       message: 'Question submitted successfully',
       submission: fullSubmission,
+      execution: clientExecution,
       session,
     });
   }
