@@ -1,7 +1,7 @@
 export default function ShippingPolicyPage() {
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-10 space-y-6 text-zinc-300">
-      <div className="border-b border-zinc-800 pb-4">
+      <div className="border-b border-[#383838] pb-4">
         <h1 className="text-2xl sm:text-3xl font-bold text-white">Shipping & Delivery Policy</h1>
         <p className="text-xs text-zinc-400 font-mono mt-1">
           Digital Products & Electronic Delivery Details
@@ -12,7 +12,7 @@ export default function ShippingPolicyPage() {
         <section className="space-y-2">
           <h2 className="text-base font-bold text-white">1. Digital Service Delivery</h2>
           <p>
-            Aura OA Platform provides online digital assessment software and dataset access. We do not ship physical products.
+            CodeSprint provides online digital assessment software and dataset access. We do not ship physical products.
           </p>
         </section>
 
@@ -33,7 +33,7 @@ export default function ShippingPolicyPage() {
         <section className="space-y-2">
           <h2 className="text-base font-bold text-white">4. Support for Delivery Issues</h2>
           <p>
-            If your credits do not appear within 5 minutes of payment completion, please contact our support team at <span className="text-amber-400">support@aura-oa.dev</span> with your Razorpay Payment ID for immediate resolution.
+            If your credits do not appear within 5 minutes of payment completion, please contact our support team at <a href="mailto:preran248@gmail.com" className="text-[#ffa116] hover:underline">preran248@gmail.com</a> with your Razorpay Payment ID for immediate resolution.
           </p>
         </section>
       </div>

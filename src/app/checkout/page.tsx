@@ -64,7 +64,7 @@ function CheckoutContent() {
           key: orderData.keyId || 'rzp_test_key',
           amount: orderData.amount,
           currency: orderData.currency || 'INR',
-          name: 'Aura OA Platform',
+          name: 'CodeSprint',
           description: `Payment for ${planName}`,
           image: 'https://cdn-icons-png.flaticon.com/512/9322/9322127.png',
           order_id: orderData.id,

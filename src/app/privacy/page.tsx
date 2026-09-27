@@ -1,7 +1,7 @@
 export default function PrivacyPolicyPage() {
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-10 space-y-6 text-zinc-300">
-      <div className="border-b border-zinc-800 pb-4">
+      <div className="border-b border-[#383838] pb-4">
         <h1 className="text-2xl sm:text-3xl font-bold text-white">Privacy Policy</h1>
         <p className="text-xs text-zinc-400 font-mono mt-1">
           Last updated: September 2026 • Compliant with Razorpay Merchant Onboarding Standard
@@ -12,10 +12,10 @@ export default function PrivacyPolicyPage() {
         <section className="space-y-2">
           <h2 className="text-base font-bold text-white">1. Information We Collect</h2>
           <p>
-            We collect information you provide directly to us when using Aura OA Platform, including when you create an account, customize online assessments, purchase credit passes via Razorpay, or submit question contributions.
+            We collect information you provide directly to us when using CodeSprint, including when you create an account, customize online assessments, purchase credit passes via Razorpay, or submit question contributions.
           </p>
           <ul className="list-disc pl-5 space-y-1 text-zinc-400">
-            <li>Personal identifiers (Name, Email Address, Contact Number).</li>
+            <li>Personal identifiers (Name, Email Address).</li>
             <li>Payment transaction details processed securely via Razorpay API (we do not store full credit card numbers or UPI PINs on our servers).</li>
             <li>Technical data (Browser type, device info, submission timestamps).</li>
           </ul>
@@ -42,7 +42,7 @@ export default function PrivacyPolicyPage() {
         <section className="space-y-2">
           <h2 className="text-base font-bold text-white">4. Contact Us</h2>
           <p>
-            If you have questions regarding this Privacy Policy, please contact our support team at <span className="text-amber-400">support@aura-oa.dev</span>.
+            If you have questions regarding this Privacy Policy, please contact our support team at <a href="mailto:preran248@gmail.com" className="text-[#ffa116] hover:underline">preran248@gmail.com</a>.
           </p>
         </section>
       </div>

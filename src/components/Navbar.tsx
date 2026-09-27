@@ -32,7 +32,11 @@ export default function Navbar() {
     };
     update();
     window.addEventListener('storage', update);
-    return () => window.removeEventListener('storage', update);
+    window.addEventListener('aura_credits_updated', update);
+    return () => {
+      window.removeEventListener('storage', update);
+      window.removeEventListener('aura_credits_updated', update);
+    };
   }, [pathname]);
 
   const isOAActive = pathname.startsWith('/oa/') && !pathname.includes('/results/');

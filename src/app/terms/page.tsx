@@ -1,7 +1,7 @@
 export default function TermsPage() {
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-10 space-y-6 text-zinc-300">
-      <div className="border-b border-zinc-800 pb-4">
+      <div className="border-b border-[#383838] pb-4">
         <h1 className="text-2xl sm:text-3xl font-bold text-white">Terms & Conditions</h1>
         <p className="text-xs text-zinc-400 font-mono mt-1">
           Effective Date: September 2026
@@ -12,7 +12,7 @@ export default function TermsPage() {
         <section className="space-y-2">
           <h2 className="text-base font-bold text-white">1. Acceptance of Terms</h2>
           <p>
-            By accessing or using Aura OA Platform, you agree to be bound by these Terms and Conditions. If you do not agree, please do not use our services.
+            By accessing or using CodeSprint, you agree to be bound by these Terms and Conditions. If you do not agree, please do not use our services.
           </p>
         </section>
 
