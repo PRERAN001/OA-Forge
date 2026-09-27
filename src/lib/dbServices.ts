@@ -29,6 +29,43 @@ export async function syncUserWithMongoDB(email: string, name?: string, image?: 
   }
 }
 
+export async function getUserFromDB(email: string) {
+  try {
+    const conn = await connectToDatabase();
+    if (!conn) return null;
+    const user = await UserModel.findOne({ email });
+    return user;
+  } catch (err) {
+    console.warn('MongoDB getUserFromDB warning:', err);
+    return null;
+  }
+}
+
+export async function updateUserCreditStatusInDB(
+  email: string,
+  updateData: {
+    isUnlimited?: boolean;
+    unlimitedExpiry?: string;
+    credits?: number;
+    contributedCount?: number;
+  }
+) {
+  try {
+    const conn = await connectToDatabase();
+    if (!conn) return null;
+
+    const user = await UserModel.findOneAndUpdate(
+      { email },
+      { $set: updateData },
+      { new: true, upsert: true }
+    );
+    return user;
+  } catch (err) {
+    console.warn('MongoDB updateUserCreditStatusInDB warning:', err);
+    return null;
+  }
+}
+
 export async function saveOASessionToDB(session: OASession, userEmail?: string) {
   try {
     const conn = await connectToDatabase();

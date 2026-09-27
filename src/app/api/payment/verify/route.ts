@@ -1,18 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { recordPaymentToDB } from '@/lib/dbServices';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { recordPaymentToDB, updateUserCreditStatusInDB } from '@/lib/dbServices';
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
     const {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
       planId,
       credits,
-      userEmail,
+      userEmail: bodyEmail,
     } = await request.json();
 
+    const email = session?.user?.email || bodyEmail;
     const key_secret = process.env.RAZORPAY_KEY_SECRET;
 
     if (key_secret && razorpay_signature) {
@@ -26,7 +30,7 @@ export async function POST(request: NextRequest) {
         await recordPaymentToDB({
           orderId: razorpay_order_id,
           paymentId: razorpay_payment_id,
-          userEmail,
+          userEmail: email,
           planId: planId || 'unlimited_3months_99',
           amount: 99,
           credits: credits || 999,
@@ -43,12 +47,22 @@ export async function POST(request: NextRequest) {
     await recordPaymentToDB({
       orderId: razorpay_order_id,
       paymentId: razorpay_payment_id || `pay_mock_${Date.now()}`,
-      userEmail,
+      userEmail: email,
       planId: planId || 'unlimited_3months_99',
       amount: 99,
       credits: credits || 999,
       status: 'verified',
     });
+
+    if (email) {
+      const expiry = new Date();
+      expiry.setMonth(expiry.getMonth() + 3);
+      await updateUserCreditStatusInDB(email, {
+        isUnlimited: true,
+        unlimitedExpiry: expiry.toISOString(),
+        credits: 999,
+      });
+    }
 
     return NextResponse.json({
       status: 'success',

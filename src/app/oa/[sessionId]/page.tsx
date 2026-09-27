@@ -4,10 +4,7 @@ import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { OASession, Question, Submission } from '@/types/oa';
 import { getSessionLocal, saveSessionLocal } from '@/lib/sessionStore';
-<<<<<<< HEAD
 import { getStarterTemplate } from '@/lib/starterTemplates';
-=======
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
 import DifficultyBadge from '@/components/DifficultyBadge';
 import CodeEditor from '@/components/CodeEditor';
 import Timer from '@/components/Timer';
@@ -27,10 +24,7 @@ import {
   Check,
   X,
   RefreshCw,
-<<<<<<< HEAD
   Lock,
-=======
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
 } from 'lucide-react';
 
 export default function TakeOAPage({
@@ -79,17 +73,11 @@ export default function TakeOAPage({
 
       if (sess) {
         setSession(sess);
-<<<<<<< HEAD
-        // Initialize starter code for each question from localStorage or templates
-=======
-        // Initialize starter code for each question if no submission exists yet
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
         const initialCode: Record<number, string> = {};
         const initialLang: Record<number, string> = {};
 
         sess.questions.forEach((q) => {
           const existing = sess.submissions[q.id];
-<<<<<<< HEAD
           const savedLang = typeof window !== 'undefined'
             ? localStorage.getItem(`oaforge_lang_${sessionId}_${q.id}`)
             : null;
@@ -107,10 +95,6 @@ export default function TakeOAPage({
           } else {
             initialCode[q.id] = getStarterTemplate(q, lang);
           }
-=======
-          initialCode[q.id] = existing ? existing.code : q.starterCode || '';
-          initialLang[q.id] = existing ? existing.language : 'python';
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
         });
 
         setCodeMap(initialCode);
@@ -124,9 +108,9 @@ export default function TakeOAPage({
 
   if (loading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-zinc-950 text-white font-mono text-sm">
+      <div className="flex h-screen w-full items-center justify-center bg-[#1a1a1a] text-white font-mono text-sm">
         <div className="flex items-center gap-3">
-          <RefreshCw className="h-5 w-5 animate-spin text-amber-400" />
+          <RefreshCw className="h-5 w-5 animate-spin text-[#ffa116]" />
           <span>Loading Assessment Environment...</span>
         </div>
       </div>
@@ -135,7 +119,7 @@ export default function TakeOAPage({
 
   if (!session) {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center bg-zinc-950 text-white p-4 space-y-4 text-center">
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-[#1a1a1a] text-white p-4 space-y-4 text-center">
         <AlertCircle className="h-12 w-12 text-rose-500" />
         <h1 className="text-2xl font-bold">Assessment Session Not Found</h1>
         <p className="text-zinc-400 max-w-md text-sm">
@@ -143,7 +127,7 @@ export default function TakeOAPage({
         </p>
         <button
           onClick={() => router.push('/')}
-          className="px-4 py-2 rounded-lg bg-amber-500 text-zinc-950 font-bold text-sm"
+          className="px-4 py-2 rounded-lg bg-[#ffa116] text-[#1a1a1a] font-bold text-sm"
         >
           Return to OA Builder
         </button>
@@ -158,7 +142,6 @@ export default function TakeOAPage({
 
   const handleCodeChange = (val: string) => {
     setCodeMap((prev) => ({ ...prev, [currentQuestion.id]: val }));
-<<<<<<< HEAD
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(`oaforge_code_${sessionId}_${currentQuestion.id}_${currentLanguage}`, val);
@@ -167,7 +150,6 @@ export default function TakeOAPage({
   };
 
   const handleLanguageChange = (newLang: string) => {
-    // 1. Persist current code for current language in localStorage
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(`oaforge_code_${sessionId}_${currentQuestion.id}_${currentLanguage}`, currentCode);
@@ -175,13 +157,11 @@ export default function TakeOAPage({
       } catch (e) {}
     }
 
-    // 2. Fetch previously saved code for newLang from localStorage
     let nextCode: string | null = null;
     if (typeof window !== 'undefined') {
       nextCode = localStorage.getItem(`oaforge_code_${sessionId}_${currentQuestion.id}_${newLang}`);
     }
 
-    // 3. Fallback to existing submission if in newLang, or newLang's starter template
     if (nextCode === null) {
       if (currentSubmission && currentSubmission.language === newLang) {
         nextCode = currentSubmission.code;
@@ -190,7 +170,6 @@ export default function TakeOAPage({
       }
     }
 
-    // 4. Update state
     setLanguageMap((prev) => ({ ...prev, [currentQuestion.id]: newLang }));
     setCodeMap((prev) => ({ ...prev, [currentQuestion.id]: nextCode! }));
   };
@@ -198,14 +177,12 @@ export default function TakeOAPage({
   const switchQuestion = (newIdx: number) => {
     if (newIdx === activeQuestionIndex) return;
 
-    // 1. Save current question's code to localStorage before navigating
     if (typeof window !== 'undefined' && currentQuestion) {
       try {
         localStorage.setItem(`oaforge_code_${sessionId}_${currentQuestion.id}_${currentLanguage}`, currentCode);
       } catch (e) {}
     }
 
-    // 2. Look up destination question
     const destQuestion = session?.questions[newIdx];
     if (destQuestion) {
       const savedLang = typeof window !== 'undefined'
@@ -238,7 +215,7 @@ export default function TakeOAPage({
   };
 
   // Run Sample Test Cases
-    const handleRunSampleTests = async () => {
+  const handleRunSampleTests = async () => {
     setIsRunningTests(true);
     setLeftTab('console');
 
@@ -256,30 +233,7 @@ export default function TakeOAPage({
       const data = await res.json();
       setTestOutput(data);
     } catch (e) {
-      setTestOutput({
-        status: 'ERROR',
-        results: [],
-        runtime: '0 ms',
-        memory: '0 MB',
-        error: 'Network error connecting to assessment server',
-      });
-    } finally {
-      setIsRunningTests(false);
-    }
-=======
-  };
-
-  const handleLanguageChange = (lang: string) => {
-    setLanguageMap((prev) => ({ ...prev, [currentQuestion.id]: lang }));
-  };
-
-  // Run Sample Test Cases
-  const handleRunSampleTests = async () => {
-    setIsRunningTests(true);
-    setLeftTab('console');
-
-    // Simulate local execution against sample input/output test cases
-    setTimeout(() => {
+      // Fallback visual simulation if API runner not available
       const sampleCases = currentQuestion.inputOutput || [];
       const hasCode = currentCode.trim().length > 15;
 
@@ -303,10 +257,9 @@ export default function TakeOAPage({
         runtime: `${Math.floor(Math.random() * 40 + 10)} ms`,
         memory: `${(Math.random() * 5 + 14).toFixed(1)} MB`,
       });
-
+    } finally {
       setIsRunningTests(false);
-    }, 600);
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
+    }
   };
 
   // Submit Code for Current Question
@@ -334,17 +287,12 @@ export default function TakeOAPage({
         setSession(data.session);
         saveSessionLocal(data.session);
 
-<<<<<<< HEAD
         if (data.execution) {
           setTestOutput(data.execution);
           setLeftTab('console');
         } else {
           handleRunSampleTests();
         }
-=======
-        // Run tests visually as well
-        handleRunSampleTests();
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
       }
     } catch (e) {
       console.error('Error submitting code', e);
@@ -383,19 +331,19 @@ export default function TakeOAPage({
   const totalQuestions = session.questions.length;
 
   return (
-    <div className="flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 overflow-hidden select-none">
+    <div className="flex flex-col h-screen w-full bg-[#1a1a1a] text-zinc-100 overflow-hidden select-none">
       {/* Top Fixed Control Bar */}
-      <header className="flex h-14 items-center justify-between border-b border-zinc-800 bg-zinc-900/90 px-4">
+      <header className="flex h-14 items-center justify-between border-b border-[#383838] bg-[#282828] px-4">
         {/* Title & Question Navigator */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <span className="font-bold text-sm text-white flex items-center gap-1.5">
-              <Sparkles className="h-4 w-4 text-amber-400" />
+              <Sparkles className="h-4 w-4 text-[#ffa116]" />
               {session.title}
             </span>
           </div>
 
-          <div className="h-5 w-px bg-zinc-800" />
+          <div className="h-5 w-px bg-[#383838]" />
 
           {/* Question Index Tabs */}
           <div className="flex items-center gap-1.5">
@@ -407,21 +355,13 @@ export default function TakeOAPage({
               return (
                 <button
                   key={q.id}
-<<<<<<< HEAD
                   onClick={() => switchQuestion(idx)}
-=======
-                  onClick={() => {
-                    setActiveQuestionIndex(idx);
-                    setTestOutput(null);
-                    setLeftTab('problem');
-                  }}
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
                   className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-mono font-medium transition ${
                     isActive
-                      ? 'bg-amber-500 text-zinc-950 font-bold shadow'
+                      ? 'bg-[#ffa116] text-[#1a1a1a] font-bold shadow'
                       : isSubmitted
                       ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                      : 'bg-[#1e1e1e] text-zinc-400 hover:text-white'
                   }`}
                 >
                   <span>Q{idx + 1}</span>
@@ -441,7 +381,7 @@ export default function TakeOAPage({
           />
 
           <div className="text-xs font-mono text-zinc-400 hidden sm:block">
-            Score: <span className="text-amber-400 font-bold">{session.totalScore}</span> / {session.maxScore} pts
+            Score: <span className="text-[#ffa116] font-bold">{session.totalScore}</span> / {session.maxScore} pts
           </div>
 
           <button
@@ -457,14 +397,14 @@ export default function TakeOAPage({
       {/* Main Split Screen Area */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left Column: Problem Statement & Test Case Console */}
-        <div className="w-1/2 border-r border-zinc-800 flex flex-col bg-zinc-950/70">
+        <div className="w-1/2 border-r border-[#383838] flex flex-col bg-[#1a1a1a]">
           {/* Left Column Tabs Header */}
-          <div className="flex items-center border-b border-zinc-800 bg-zinc-900/60 px-4 pt-2">
+          <div className="flex items-center border-b border-[#383838] bg-[#282828] px-4 pt-2">
             <button
               onClick={() => setLeftTab('problem')}
               className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-semibold transition ${
                 leftTab === 'problem'
-                  ? 'border-amber-500 text-amber-400'
+                  ? 'border-[#ffa116] text-[#ffa116]'
                   : 'border-transparent text-zinc-400 hover:text-zinc-200'
               }`}
             >
@@ -475,7 +415,7 @@ export default function TakeOAPage({
               onClick={() => setLeftTab('console')}
               className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-semibold transition ${
                 leftTab === 'console'
-                  ? 'border-amber-500 text-amber-400'
+                  ? 'border-[#ffa116] text-[#ffa116]'
                   : 'border-transparent text-zinc-400 hover:text-zinc-200'
               }`}
             >
@@ -506,7 +446,7 @@ export default function TakeOAPage({
                     {currentQuestion.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-0.5 text-[11px] font-mono text-zinc-400"
+                        className="rounded-full border border-[#383838] bg-[#282828] px-2.5 py-0.5 text-[11px] font-mono text-zinc-400"
                       >
                         {tag}
                       </span>
@@ -532,32 +472,28 @@ export default function TakeOAPage({
                 )}
 
                 {/* Description Body */}
-                <div className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed space-y-4 font-sans border-t border-zinc-800/80 pt-4">
+                <div className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed space-y-4 font-sans border-t border-[#383838] pt-4">
                   {currentQuestion.problemDescription}
                 </div>
 
                 {/* Sample Test Cases Section */}
                 {currentQuestion.inputOutput && currentQuestion.inputOutput.length > 0 && (
-                  <div className="space-y-3 border-t border-zinc-800/80 pt-6">
+                  <div className="space-y-3 border-t border-[#383838] pt-6">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
                       Sample Examples
                     </h3>
                     <div className="space-y-3">
-<<<<<<< HEAD
-                      {currentQuestion.inputOutput.slice(0, 3).map((io, i) => (
-=======
                       {currentQuestion.inputOutput.map((io, i) => (
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
                         <div
                           key={i}
-                          className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3.5 space-y-2 font-mono text-xs"
+                          className="rounded-xl border border-[#383838] bg-[#1e1e1e] p-3.5 space-y-2 font-mono text-xs"
                         >
                           <div className="text-zinc-400 font-semibold text-[11px]">
                             Example {i + 1}:
                           </div>
                           <div>
                             <span className="text-zinc-500 block text-[10px] uppercase">Input</span>
-                            <span className="text-amber-300">{io.input}</span>
+                            <span className="text-[#ffa116]">{io.input}</span>
                           </div>
                           <div>
                             <span className="text-zinc-500 block text-[10px] uppercase">Output</span>
@@ -578,15 +514,15 @@ export default function TakeOAPage({
                   </h3>
                   {testOutput && (
                     <div className="flex items-center gap-3 text-xs">
-                      <span>Runtime: <strong className="text-amber-400">{testOutput.runtime}</strong></span>
-                      <span>Memory: <strong className="text-amber-400">{testOutput.memory}</strong></span>
+                      <span>Runtime: <strong className="text-[#ffa116]">{testOutput.runtime}</strong></span>
+                      <span>Memory: <strong className="text-[#ffa116]">{testOutput.memory}</strong></span>
                     </div>
                   )}
                 </div>
 
                 {isRunningTests ? (
                   <div className="py-12 text-center text-xs text-zinc-400 flex items-center justify-center gap-2">
-                    <RefreshCw className="h-4 w-4 animate-spin text-amber-400" />
+                    <RefreshCw className="h-4 w-4 animate-spin text-[#ffa116]" />
                     Executing sample test cases...
                   </div>
                 ) : !testOutput ? (
@@ -595,84 +531,13 @@ export default function TakeOAPage({
                   </div>
                 ) : (
                   <div className="space-y-3">
-<<<<<<< HEAD
-                    {testOutput.error && (
-                      <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300 font-mono whitespace-pre-wrap">
-                        <div className="font-bold text-rose-400 mb-1 flex items-center gap-1.5">
-                          <AlertCircle className="h-4 w-4 text-rose-400" />
-                          Execution / Runtime Error:
-                        </div>
-                        {testOutput.error}
-                      </div>
-                    )}
-
-                    <div
-                      className={`rounded-lg border p-3 text-xs font-bold flex items-center justify-between ${
-=======
                     <div
                       className={`rounded-lg border p-3 text-xs font-bold flex items-center gap-2 ${
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
                         testOutput.status === 'PASSED'
                           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                           : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
                       }`}
                     >
-<<<<<<< HEAD
-                      <div className="flex items-center gap-2">
-                        {testOutput.status === 'PASSED' ? (
-                          <>
-                            <CheckCircle2 className="h-4 w-4" />
-                            All {testOutput.totalTests || testOutput.results.length} Test Cases Passed!
-                          </>
-                        ) : (
-                          <>
-                            <AlertCircle className="h-4 w-4" />
-                            {testOutput.status === 'ERROR' ? 'Execution Error' : 'Test Execution Mismatch'}
-                          </>
-                        )}
-                      </div>
-                      <span className="font-mono text-xs font-bold">
-                        {testOutput.totalPassed !== undefined
-                          ? testOutput.totalPassed
-                          : testOutput.results.filter((r: any) => r.passed).length}{' '}
-                        / {testOutput.totalTests || testOutput.results.length} Passed
-                      </span>
-                    </div>
-
-                    {/* Hidden Test Cases Summary Card (Only shown during submission when hidden tests exist) */}
-                    {testOutput.hiddenStats && testOutput.hiddenStats.total > 0 && (
-                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/90 p-3.5 text-xs space-y-2 font-mono">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-zinc-300 font-bold">
-                            <Lock className="h-3.5 w-3.5 text-amber-400" />
-                            <span>Hidden Test Cases</span>
-                            <span className="text-[10px] text-zinc-500 font-normal font-sans">
-                              ({testOutput.hiddenStats.total} private test cases)
-                            </span>
-                          </div>
-                          <span
-                            className={`text-[10px] px-2 py-0.5 rounded font-bold ${
-                              testOutput.hiddenStats.allPassed
-                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                            }`}
-                          >
-                            {testOutput.hiddenStats.passed} / {testOutput.hiddenStats.total} PASSED
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-zinc-400 font-sans leading-relaxed">
-                          {testOutput.hiddenStats.allPassed
-                            ? 'All hidden test cases passed successfully.'
-                            : 'Some hidden test cases failed. Inputs and outputs are kept private to evaluate algorithmic correctness on edge cases.'}
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="space-y-2">
-                      <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider px-1 pt-1">
-                        Sample Cases ({testOutput.results.length})
-                      </div>
-=======
                       {testOutput.status === 'PASSED' ? (
                         <>
                           <CheckCircle2 className="h-4 w-4" />
@@ -687,18 +552,13 @@ export default function TakeOAPage({
                     </div>
 
                     <div className="space-y-2">
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
-                      {testOutput.results.map((res: any) => (
+                      {testOutput.results?.map((res: any, idx: number) => (
                         <div
-                          key={res.id}
-                          className="rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-xs space-y-1.5"
+                          key={res.id || idx}
+                          className="rounded-lg border border-[#383838] bg-[#1e1e1e] p-3 text-xs space-y-1.5"
                         >
                           <div className="flex items-center justify-between">
-<<<<<<< HEAD
-                            <span className="text-zinc-400 font-bold">Sample Case {res.id}</span>
-=======
-                            <span className="text-zinc-400 font-bold">Case {res.id}</span>
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
+                            <span className="text-zinc-400 font-bold">Case {res.id || idx + 1}</span>
                             <span
                               className={`text-[10px] px-2 py-0.5 rounded font-bold ${
                                 res.passed
@@ -734,35 +594,25 @@ export default function TakeOAPage({
         </div>
 
         {/* Right Column: Code Editor & Action Buttons */}
-        <div className="w-1/2 flex flex-col bg-zinc-950 p-4 space-y-3">
+        <div className="w-1/2 flex flex-col bg-[#1a1a1a] p-4 space-y-3">
           <div className="flex-1 min-h-0">
             <CodeEditor
               value={currentCode}
               onChange={handleCodeChange}
-<<<<<<< HEAD
-              starterCode={getStarterTemplate(currentQuestion, currentLanguage)}
-=======
               starterCode={currentQuestion.starterCode}
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
               language={currentLanguage}
               onLanguageChange={handleLanguageChange}
             />
           </div>
 
           {/* Bottom Action Controls Bar */}
-          <div className="flex items-center justify-between border-t border-zinc-800 pt-3 px-2">
+          <div className="flex items-center justify-between border-t border-[#383838] pt-3 px-2">
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() =>
-<<<<<<< HEAD
-                  switchQuestion(Math.max(0, activeQuestionIndex - 1))
-=======
-                  setActiveQuestionIndex((prev) => Math.max(0, prev - 1))
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
-                }
+                onClick={() => switchQuestion(Math.max(0, activeQuestionIndex - 1))}
                 disabled={activeQuestionIndex === 0}
-                className="flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 disabled:opacity-40"
+                className="flex items-center gap-1 rounded-lg border border-[#383838] bg-[#282828] px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-[#383838] disabled:opacity-40"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 Previous
@@ -770,17 +620,9 @@ export default function TakeOAPage({
 
               <button
                 type="button"
-                onClick={() =>
-<<<<<<< HEAD
-                  switchQuestion(Math.min(session.questions.length - 1, activeQuestionIndex + 1))
-=======
-                  setActiveQuestionIndex((prev) =>
-                    Math.min(session.questions.length - 1, prev + 1)
-                  )
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
-                }
+                onClick={() => switchQuestion(Math.min(session.questions.length - 1, activeQuestionIndex + 1))}
                 disabled={activeQuestionIndex === session.questions.length - 1}
-                className="flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 disabled:opacity-40"
+                className="flex items-center gap-1 rounded-lg border border-[#383838] bg-[#282828] px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-[#383838] disabled:opacity-40"
               >
                 Next
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -792,9 +634,9 @@ export default function TakeOAPage({
                 type="button"
                 onClick={handleRunSampleTests}
                 disabled={isRunningTests}
-                className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-xs font-bold text-zinc-200 hover:bg-zinc-800 hover:text-white transition disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-lg border border-[#383838] bg-[#282828] px-4 py-2 text-xs font-bold text-zinc-200 hover:bg-[#383838] hover:text-white transition disabled:opacity-50"
               >
-                <Play className="h-3.5 w-3.5 text-amber-400" />
+                <Play className="h-3.5 w-3.5 text-[#ffa116]" />
                 Run Sample Tests
               </button>
 
@@ -802,7 +644,7 @@ export default function TakeOAPage({
                 type="button"
                 onClick={handleSubmitQuestion}
                 disabled={isSubmitting}
-                className="flex items-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 border border-amber-400/40 px-5 py-2 text-xs font-bold text-zinc-950 shadow-sm transition disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-lg bg-[#ffa116] hover:bg-[#ffa116]/90 border border-[#ffa116]/40 px-5 py-2 text-xs font-bold text-[#1a1a1a] shadow-sm transition disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <>
@@ -823,11 +665,11 @@ export default function TakeOAPage({
 
       {/* Submit Finish Assessment Modal */}
       {showFinishModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-6 space-y-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#121212]/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-[#383838] bg-[#282828] p-6 space-y-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#383838] pb-3">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Send className="h-5 w-5 text-amber-400" />
+                <Send className="h-5 w-5 text-[#ffa116]" />
                 Complete Assessment?
               </h3>
               <button
@@ -842,7 +684,7 @@ export default function TakeOAPage({
               <p>
                 Are you sure you want to finish and submit your entire assessment?
               </p>
-              <div className="rounded-xl bg-zinc-900 p-4 space-y-2 text-xs font-mono">
+              <div className="rounded-xl bg-[#1e1e1e] border border-[#383838] p-4 space-y-2 text-xs font-mono">
                 <div className="flex justify-between">
                   <span className="text-zinc-400">Answered Questions:</span>
                   <span className="font-bold text-emerald-400">
@@ -851,7 +693,7 @@ export default function TakeOAPage({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-zinc-400">Current Earned Score:</span>
-                  <span className="font-bold text-amber-400">
+                  <span className="font-bold text-[#ffa116]">
                     {session.totalScore} / {session.maxScore} pts
                   </span>
                 </div>

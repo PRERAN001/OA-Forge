@@ -41,20 +41,17 @@ export default function CodeEditor({
     typescript: 'typescript',
     cpp: 'cpp',
     java: 'java',
-<<<<<<< HEAD
     go: 'go',
     ruby: 'ruby',
-=======
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
   };
 
   return (
-    <div className="flex flex-col h-full rounded-xl border border-zinc-800 bg-zinc-950 overflow-hidden shadow-xl">
+    <div className="flex flex-col h-full rounded-xl border border-[#383838] bg-[#282828] overflow-hidden shadow-xl">
       {/* Editor Top Bar */}
-      <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/90 px-4 py-2 text-xs font-mono text-zinc-400">
+      <div className="flex items-center justify-between border-b border-[#383838] bg-[#1e1e1e] px-4 py-2 text-xs font-mono text-zinc-400">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 text-zinc-300">
-            <Code className="h-4 w-4 text-amber-400" />
+            <Code className="h-4 w-4 text-[#ffa116]" />
             <span className="font-semibold text-zinc-200">Solution Editor</span>
           </div>
 
@@ -62,22 +59,15 @@ export default function CodeEditor({
             <select
               value={language}
               onChange={(e) => onLanguageChange(e.target.value)}
-              className="rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-xs text-zinc-200 focus:border-amber-500 focus:outline-none"
+              className="rounded border border-[#383838] bg-[#282828] px-2.5 py-1 text-xs text-zinc-200 focus:border-[#ffa116] focus:outline-none"
             >
               <option value="python">Python 3</option>
-<<<<<<< HEAD
               <option value="cpp">C++ (GCC 9.2)</option>
               <option value="java">Java (OpenJDK 13)</option>
               <option value="javascript">JavaScript (Node.js)</option>
               <option value="typescript">TypeScript</option>
               <option value="go">Go (1.13)</option>
               <option value="ruby">Ruby (2.7)</option>
-=======
-              <option value="javascript">JavaScript</option>
-              <option value="typescript">TypeScript</option>
-              <option value="cpp">C++</option>
-              <option value="java">Java</option>
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
             </select>
           )}
         </div>
@@ -85,7 +75,7 @@ export default function CodeEditor({
         <div className="flex items-center gap-2">
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1.5 rounded px-2 py-1 transition hover:bg-zinc-800 hover:text-zinc-200 text-zinc-400"
+            className="flex items-center gap-1.5 rounded px-2 py-1 transition hover:bg-[#383838] hover:text-zinc-200 text-zinc-400"
             title="Copy code"
           >
             {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
@@ -95,7 +85,7 @@ export default function CodeEditor({
           {starterCode && !readOnly && (
             <button
               onClick={handleReset}
-              className="flex items-center gap-1 rounded px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-amber-400 transition"
+              className="flex items-center gap-1 rounded px-2 py-1 text-zinc-400 hover:bg-[#383838] hover:text-[#ffa116] transition"
               title="Reset code"
             >
               <RotateCcw className="h-3.5 w-3.5" />
@@ -127,7 +117,7 @@ export default function CodeEditor({
             cursorBlinking: 'smooth',
           }}
           loading={
-            <div className="flex h-full items-center justify-center bg-zinc-950 text-sm text-zinc-400">
+            <div className="flex h-full items-center justify-center bg-[#1a1a1a] text-sm text-zinc-400">
               Loading Code Editor...
             </div>
           }

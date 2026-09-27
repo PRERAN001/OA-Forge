@@ -6,6 +6,7 @@ export interface IUser extends Document {
   image?: string;
   credits: number;
   isUnlimited: boolean;
+  unlimitedExpiry?: Date;
   contributedCount: number;
   createdAt: Date;
   updatedAt: Date;
@@ -18,6 +19,7 @@ const UserSchema: Schema<IUser> = new Schema(
     image: { type: String },
     credits: { type: Number, default: 1 },
     isUnlimited: { type: Boolean, default: false },
+    unlimitedExpiry: { type: Date },
     contributedCount: { type: Number, default: 0 },
   },
   { timestamps: true }

@@ -111,7 +111,7 @@ export default function ContributePage() {
     setSelectedTags(selectedTags.filter((t) => t !== tag));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSuccessReward(null);
     setErrorMessage(null);
@@ -138,8 +138,8 @@ export default function ContributePage() {
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const res = submitQuestionContribution({
+    try {
+      const res = await submitQuestionContribution({
         title,
         difficulty,
         tags: selectedTags,
@@ -152,7 +152,7 @@ export default function ContributePage() {
       setIsSubmitting(false);
 
       if (!res.success) {
-        setErrorMessage(res.error || 'This question already exists in the question bank.');
+        setErrorMessage(res.error || 'This question already exists in the online database.');
         return;
       }
 
@@ -174,7 +174,10 @@ export default function ContributePage() {
       // Reset Form fields
       setTitle('');
       setProblemDescription('');
-    }, 400);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setErrorMessage(err?.message || 'Failed to submit question to database.');
+    }
   };
 
   return (

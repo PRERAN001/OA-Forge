@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRandomizedQuestions, filterQuestions } from '@/lib/questions';
+import { getRandomizedQuestionsFromDB, filterQuestionsFromDB } from '@/lib/questions';
 import { OASession, OAFilterConfig, Question } from '@/types/oa';
 import { saveSessionServer } from '@/lib/sessionStore';
 import { saveOASessionToDB } from '@/lib/dbServices';
@@ -11,12 +11,12 @@ export async function POST(request: NextRequest) {
     let selectedQuestions: Question[] = [];
 
     if (config.mode === 'manual' && config.selectedQuestionIds.length > 0) {
-      selectedQuestions = filterQuestions({
+      selectedQuestions = await filterQuestionsFromDB({
         questionIds: config.selectedQuestionIds,
         pointsConfig: config.pointsConfig,
       });
     } else {
-      selectedQuestions = getRandomizedQuestions(
+      selectedQuestions = await getRandomizedQuestionsFromDB(
         config.difficulties,
         config.tags,
         config.questionCount,
@@ -34,12 +34,15 @@ export async function POST(request: NextRequest) {
     // Apply custom points to questions
     selectedQuestions = selectedQuestions.map((q) => ({
       ...q,
-      points: config.pointsConfig[q.difficulty] || q.points,
+      points: config.pointsConfig ? config.pointsConfig[q.difficulty] || q.points : q.points,
     }));
 
     const maxScore = selectedQuestions.reduce((acc, q) => acc + q.points, 0);
 
-    const sessionId = process.env.NODE_ENV === 'test' ? 'test-id' : Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+    const sessionId =
+      process.env.NODE_ENV === 'test'
+        ? 'test-id'
+        : Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
 
     const session: OASession = {
       id: sessionId,

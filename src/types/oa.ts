@@ -15,10 +15,7 @@ export interface Question {
   problemDescription: string;
   starterCode: string;
   entryPoint: string;
-<<<<<<< HEAD
   starterCodes?: Record<string, string>;
-=======
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
   inputOutput: TestCase[];
 }
 

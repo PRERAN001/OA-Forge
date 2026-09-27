@@ -1,9 +1,10 @@
-import { getAllQuestions } from '@/lib/questions';
+import { Question } from '@/types/oa';
 
 export interface UserCreditsState {
-  credits: number; // OA credits balance (starts at 1)
+  credits: number; // OA credits balance
   contributedCount: number; // Total questions contributed (every 3 gives 1 credit)
   isUnlimited: boolean; // True if purchased 3-month unlimited pass
+  unlimitedExpiry?: string;
   history: Array<{
     id: string;
     type: 'free_initial' | 'purchase' | 'contribution';
@@ -13,69 +14,92 @@ export interface UserCreditsState {
   }>;
 }
 
-const CREDITS_STORAGE_KEY = 'aura_user_credits_v1';
+let inMemoryCreditsState: UserCreditsState = {
+  credits: 1,
+  contributedCount: 0,
+  isUnlimited: false,
+  history: [
+    {
+      id: 'init',
+      type: 'free_initial',
+      amount: 1,
+      description: 'Initial Free Assessment Credit',
+      timestamp: new Date().toISOString(),
+    },
+  ],
+};
+
 const CONTRIBUTIONS_STORAGE_KEY = 'aura_contributed_questions_v1';
 
 export function getUserCredits(): UserCreditsState {
-  if (typeof window === 'undefined') {
-    return {
-      credits: 1,
-      contributedCount: 0,
-      isUnlimited: false,
-      history: [
-        {
-          id: 'init',
-          type: 'free_initial',
-          amount: 1,
-          description: 'Initial Free Assessment Credit',
-          timestamp: new Date().toISOString(),
-        },
-      ],
-    };
+  // Auto-expire unlimited pass if expired
+  if (inMemoryCreditsState.isUnlimited && inMemoryCreditsState.unlimitedExpiry) {
+    if (new Date(inMemoryCreditsState.unlimitedExpiry).getTime() < Date.now()) {
+      inMemoryCreditsState.isUnlimited = false;
+      inMemoryCreditsState.unlimitedExpiry = undefined;
+      saveUserCredits(inMemoryCreditsState);
+    }
   }
 
+  return inMemoryCreditsState;
+}
+
+export async function fetchUserCreditsFromDB(email?: string): Promise<UserCreditsState> {
   try {
-    const raw = localStorage.getItem(CREDITS_STORAGE_KEY);
-    if (!raw) {
-      const initial: UserCreditsState = {
-        credits: 1,
-        contributedCount: 0,
-        isUnlimited: false,
-        history: [
-          {
-            id: 'init_' + Date.now(),
-            type: 'free_initial',
-            amount: 1,
-            description: 'Initial Free Assessment Credit',
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      };
-      localStorage.setItem(CREDITS_STORAGE_KEY, JSON.stringify(initial));
-      return initial;
+    const url = email ? `/api/user/credits?email=${encodeURIComponent(email)}` : '/api/user/credits';
+    const res = await fetch(url);
+    if (res.ok) {
+      const dbData = await res.json();
+      if (dbData.credits !== undefined) {
+        inMemoryCreditsState.credits = dbData.credits;
+        inMemoryCreditsState.isUnlimited = !!dbData.isUnlimited;
+        inMemoryCreditsState.unlimitedExpiry = dbData.unlimitedExpiry;
+        inMemoryCreditsState.contributedCount = dbData.contributedCount ?? 0;
+
+        // Auto-expire 3-month pass if expired
+        if (inMemoryCreditsState.isUnlimited && inMemoryCreditsState.unlimitedExpiry) {
+          if (new Date(inMemoryCreditsState.unlimitedExpiry).getTime() < Date.now()) {
+            inMemoryCreditsState.isUnlimited = false;
+            inMemoryCreditsState.unlimitedExpiry = undefined;
+            saveUserCredits(inMemoryCreditsState);
+          }
+        }
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('aura_credits_updated'));
+        }
+      }
     }
-<<<<<<< HEAD
-    const parsed: UserCreditsState = JSON.parse(raw);
-    // Ensure the user always has at least 1 credit so they are never blocked from taking an assessment
-    if (parsed.credits < 1 && !parsed.isUnlimited) {
-      parsed.credits = 1;
-      saveUserCredits(parsed);
-    }
-    return parsed;
-=======
-    return JSON.parse(raw);
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
   } catch (e) {
-    return {
-      credits: 1,
-      contributedCount: 0,
-      isUnlimited: false,
-      history: [],
-    };
+    console.error('Failed to fetch user credits from DB:', e);
+  }
+  return inMemoryCreditsState;
+}
+
+export async function syncUserCreditsWithDB(email: string): Promise<UserCreditsState> {
+  return await fetchUserCreditsFromDB(email);
+}
+
+export async function saveUserCredits(state: UserCreditsState): Promise<void> {
+  inMemoryCreditsState = { ...state };
+  if (typeof window === 'undefined') return;
+  try {
+    await fetch('/api/user/credits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        credits: state.credits,
+        isUnlimited: state.isUnlimited,
+        unlimitedExpiry: state.unlimitedExpiry,
+        contributedCount: state.contributedCount,
+      }),
+    });
+    window.dispatchEvent(new Event('aura_credits_updated'));
+  } catch (e) {
+    console.error('Failed to save credits state to DB:', e);
   }
 }
 
-<<<<<<< HEAD
 export function resetUserCredits(amount = 1): UserCreditsState {
   const state: UserCreditsState = {
     credits: amount,
@@ -95,31 +119,21 @@ export function resetUserCredits(amount = 1): UserCreditsState {
   return state;
 }
 
-=======
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
-export function saveUserCredits(state: UserCreditsState): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(CREDITS_STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
-    console.error('Failed to save credits state:', e);
-  }
-}
-
 export function useOACredit(): { success: boolean; message: string; remainingCredits: number } {
   const state = getUserCredits();
 
+  // Check 3-month pass expiry
   if (state.isUnlimited) {
-    return { success: true, message: '3 Months Unlimited Pass Active', remainingCredits: 999 };
+    if (state.unlimitedExpiry && new Date(state.unlimitedExpiry).getTime() < Date.now()) {
+      state.isUnlimited = false;
+      state.unlimitedExpiry = undefined;
+      saveUserCredits(state);
+    } else {
+      return { success: true, message: '3 Months Unlimited Pass Active', remainingCredits: 999 };
+    }
   }
 
   if (state.credits <= 0) {
-<<<<<<< HEAD
-    state.credits = 1;
-  }
-
-  state.credits = Math.max(0, state.credits - 1);
-=======
     return {
       success: false,
       message: 'You have 0 OA credits remaining. Purchase ₹99 Unlimited Pass or contribute 3 questions to unlock!',
@@ -127,9 +141,9 @@ export function useOACredit(): { success: boolean; message: string; remainingCre
     };
   }
 
-  state.credits -= 1;
->>>>>>> 79805f92759fd023359b1532fe04888b298eff90
+  state.credits = Math.max(0, state.credits - 1);
   saveUserCredits(state);
+
   return { success: true, message: '1 Credit Used', remainingCredits: state.credits };
 }
 
@@ -142,6 +156,9 @@ export function addOACredits(
   const state = getUserCredits();
   if (setUnlimited) {
     state.isUnlimited = true;
+    const expiry = new Date();
+    expiry.setMonth(expiry.getMonth() + 3);
+    state.unlimitedExpiry = expiry.toISOString();
   }
   state.credits += amount;
   state.history.unshift({
@@ -178,86 +195,76 @@ export function getContributedQuestions(): ContributedQuestion[] {
   }
 }
 
-export function isQuestionDuplicate(title: string): boolean {
-  const normTitle = title.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!normTitle) return false;
-
-  // Check in main questions dataset
-  const datasetQuestions = getAllQuestions();
-  const foundInDataset = datasetQuestions.some(
-    (q) =>
-      q.title.trim().toLowerCase().replace(/[^a-z0-9]/g, '') === normTitle ||
-      q.taskId.trim().toLowerCase().replace(/[^a-z0-9]/g, '') === normTitle
-  );
-  if (foundInDataset) return true;
-
-  // Check in previously contributed user questions
-  const userContributed = getContributedQuestions();
-  const foundInContributed = userContributed.some(
-    (q) => q.title.trim().toLowerCase().replace(/[^a-z0-9]/g, '') === normTitle
-  );
-  return foundInContributed;
-}
-
-export function submitQuestionContribution(
+export async function submitQuestionContributionAsync(
   question: Omit<ContributedQuestion, 'id' | 'submittedAt'>
-): {
+): Promise<{
   success: boolean;
   error?: string;
   totalContributed: number;
   creditsEarned: number;
   progressInCurrentTier: number;
-} {
+}> {
   const state = getUserCredits();
 
-  // Duplicate Check
-  if (isQuestionDuplicate(question.title)) {
+  try {
+    const res = await fetch('/api/questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(question),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.question) {
+      return {
+        success: false,
+        error: data.error || `The question "${question.title}" already exists in the database or failed validation.`,
+        totalContributed: state.contributedCount,
+        creditsEarned: 0,
+        progressInCurrentTier: state.contributedCount % 3,
+      };
+    }
+
+    state.contributedCount += 1;
+    let creditsEarned = 0;
+
+    // Every 3 contributed questions awards 1 free OA credit!
+    if (state.contributedCount % 3 === 0) {
+      creditsEarned = 1;
+      state.credits += 1;
+      state.history.unshift({
+        id: 'contrib_reward_' + Date.now(),
+        type: 'contribution',
+        amount: 1,
+        description: `Earned 1 OA Credit for contributing ${state.contributedCount} questions!`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await saveUserCredits(state);
+
+    const progressInCurrentTier = state.contributedCount % 3 === 0 ? 3 : state.contributedCount % 3;
+
+    return {
+      success: true,
+      totalContributed: state.contributedCount,
+      creditsEarned,
+      progressInCurrentTier,
+    };
+  } catch (err: any) {
     return {
       success: false,
-      error: `The question "${question.title}" already exists in the question bank dataset. Please submit a unique problem.`,
+      error: err?.message || 'Failed to submit question to online database.',
       totalContributed: state.contributedCount,
       creditsEarned: 0,
       progressInCurrentTier: state.contributedCount % 3,
     };
   }
+}
 
-  const existingQuestions = getContributedQuestions();
-
-  const newQuestion: ContributedQuestion = {
-    ...question,
-    id: 'contrib_' + Math.random().toString(36).substring(2, 9),
-    submittedAt: new Date().toISOString(),
-  };
-
-  existingQuestions.push(newQuestion);
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(CONTRIBUTIONS_STORAGE_KEY, JSON.stringify(existingQuestions));
-  }
-
-  state.contributedCount += 1;
-  let creditsEarned = 0;
-
-  // Every 3 contributed questions awards 1 free OA credit!
-  if (state.contributedCount % 3 === 0) {
-    creditsEarned = 1;
-    state.credits += 1;
-    state.history.unshift({
-      id: 'contrib_reward_' + Date.now(),
-      type: 'contribution',
-      amount: 1,
-      description: `Earned 1 OA Credit for contributing ${state.contributedCount} questions!`,
-      timestamp: new Date().toISOString(),
-    });
-  }
-
-  saveUserCredits(state);
-
-  const progressInCurrentTier = state.contributedCount % 3 === 0 ? 3 : state.contributedCount % 3;
-
-  return {
-    success: true,
-    totalContributed: state.contributedCount,
-    creditsEarned,
-    progressInCurrentTier,
-  };
+export function submitQuestionContribution(
+  question: Omit<ContributedQuestion, 'id' | 'submittedAt'>
+) {
+  // Sync fallback calling async submit
+  return submitQuestionContributionAsync(question);
 }

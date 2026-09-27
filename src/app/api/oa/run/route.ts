@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getQuestionById } from '@/lib/questions';
+import { getQuestionByIdFromDB } from '@/lib/questions';
 import { executeOnJudge0 } from '@/lib/judge0';
 
 export async function POST(request: NextRequest) {
   try {
     const { questionId, code, language = 'python' } = await request.json();
 
-    const question = getQuestionById(Number(questionId));
+    const question = await getQuestionByIdFromDB(Number(questionId));
     if (!question) {
       return NextResponse.json({ error: 'Question not found' }, { status: 404 });
     }
