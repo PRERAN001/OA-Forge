@@ -16,7 +16,7 @@ export function parsePythonSignature(question: Question): ParsedSignature {
   const methodName = entryMatch ? entryMatch[1] : 'solve';
 
   const starter = question.starterCode || '';
-  
+
   // Find def methodName(self, ...) -> ReturnType:
   const defRegex = new RegExp(`def\\s+${methodName}\\s*\\(([^)]*)\\)(?:\\s*->\\s*([^:]+))?`);
   const match = starter.match(defRegex) || starter.match(/def\s+[a-zA-Z0-9_]+\s*\(([^)]*)\)(?:\s*->\s*([^:]+))?/);
@@ -104,6 +104,8 @@ export function mapPyTypeToTs(pyType: string): string {
   if (t === 'str' || t === 'string') return 'string';
   if (t === 'bool') return 'boolean';
   if (t === 'None' || t === 'void') return 'void';
+  if (t.includes('ListNode')) return 'ListNode | null';
+  if (t.includes('TreeNode')) return 'TreeNode | null';
 
   const listMatch = t.match(/List\[(.*)\]/);
   if (listMatch) {
@@ -114,6 +116,45 @@ export function mapPyTypeToTs(pyType: string): string {
   return 'any';
 }
 
+export function mapPyTypeToJsDoc(pyType: string): string {
+  const t = pyType.trim();
+  if (!t) return 'number';
+  if (t === 'int' || t === 'float') return 'number';
+  if (t === 'str' || t === 'string') return 'string';
+  if (t === 'bool') return 'boolean';
+  if (t === 'None' || t === 'void') return 'void';
+  if (t.includes('ListNode')) return 'ListNode';
+  if (t.includes('TreeNode')) return 'TreeNode';
+
+  const listMatch = t.match(/List\[(.*)\]/);
+  if (listMatch) {
+    const inner = mapPyTypeToJsDoc(listMatch[1]);
+    return `${inner}[]`;
+  }
+
+  return 'any';
+}
+
+export function mapPyTypeToGo(pyType: string): string {
+  const t = pyType.trim();
+  if (!t) return 'int';
+  if (t === 'int') return 'int';
+  if (t === 'str' || t === 'string') return 'string';
+  if (t === 'bool') return 'bool';
+  if (t === 'float') return 'float64';
+  if (t === 'None' || t === 'void') return '';
+  if (t.includes('ListNode')) return '*ListNode';
+  if (t.includes('TreeNode')) return '*TreeNode';
+
+  const listMatch = t.match(/List\[(.*)\]/);
+  if (listMatch) {
+    const inner = mapPyTypeToGo(listMatch[1]);
+    return `[]${inner}`;
+  }
+
+  return 'int';
+}
+
 export function getStarterTemplate(question: Question, language: string): string {
   if (question.starterCodes && question.starterCodes[language]) {
     return question.starterCodes[language];
@@ -122,6 +163,7 @@ export function getStarterTemplate(question: Question, language: string): string
   const { methodName, params, returnTypePy } = parsePythonSignature(question);
 
   switch (language) {
+    // Pure LeetCode C++ Starter Template
     case 'cpp': {
       const cppReturn = mapPyTypeToCpp(returnTypePy).type;
       const cppParams = params
@@ -132,78 +174,80 @@ export function getStarterTemplate(question: Question, language: string): string
         })
         .join(', ');
 
-      return `#include <iostream>
-#include <vector>
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
-#include <algorithm>
-
-using namespace std;
-
-class Solution {
+      return `class Solution {
 public:
     ${cppReturn} ${methodName}(${cppParams}) {
-        // Write your C++ solution here
         
     }
 };
 `;
     }
 
+    // Pure LeetCode Java Starter Template
     case 'java': {
       const javaReturn = mapPyTypeToJava(returnTypePy);
       const javaParams = params
         .map((p) => `${mapPyTypeToJava(p.pyType)} ${p.name}`)
         .join(', ');
 
-      return `import java.util.*;
-
-class Solution {
+      return `class Solution {
     public ${javaReturn} ${methodName}(${javaParams}) {
-        // Write your Java solution here
         
     }
 }
 `;
     }
 
+    // Pure LeetCode JavaScript (JSDoc + Function Expression)
     case 'javascript': {
+      const paramDocs = params
+        .map((p) => ` * @param {${mapPyTypeToJsDoc(p.pyType)}} ${p.name}`)
+        .join('\n');
+      const returnDoc = ` * @return {${mapPyTypeToJsDoc(returnTypePy)}}`;
       const jsParams = params.map((p) => p.name).join(', ');
 
       return `/**
- * Problem: ${question.title}
- * Entry: Solution().${methodName}
+${paramDocs}
+${returnDoc}
  */
-class Solution {
-    ${methodName}(${jsParams}) {
-        // Write your JavaScript solution here
-        
-    }
-}
+var ${methodName} = function(${jsParams}) {
+    
+};
 `;
     }
 
+    // Pure LeetCode TypeScript Starter Template
     case 'typescript': {
       const tsReturn = mapPyTypeToTs(returnTypePy);
       const tsParams = params
         .map((p) => `${p.name}: ${mapPyTypeToTs(p.pyType)}`)
         .join(', ');
 
-      return `class Solution {
-    ${methodName}(${tsParams}): ${tsReturn} {
-        // Write your TypeScript solution here
-        
+      return `function ${methodName}(${tsParams}): ${tsReturn} {
+    
+};
+`;
     }
+
+    // Pure LeetCode Go Starter Template
+    case 'go': {
+      const goReturn = mapPyTypeToGo(returnTypePy);
+      const goParams = params
+        .map((p) => `${p.name} ${mapPyTypeToGo(p.pyType)}`)
+        .join(', ');
+
+      return `func ${methodName}(${goParams}) ${goReturn} {
+    
 }
 `;
     }
 
+    // Pure LeetCode Python 3 Starter Template
     case 'python':
     default:
-      return (
-        question.starterCode ||
-        `class Solution:\n    def ${methodName}(self, ${params.map((p) => (p.pyType ? `${p.name}: ${p.pyType}` : p.name)).join(', ')}) -> ${returnTypePy}:\n        pass\n`
-      );
+      if (question.starterCode && question.starterCode.trim()) {
+        return question.starterCode;
+      }
+      return `class Solution:\n    def ${methodName}(self, ${params.map((p) => (p.pyType ? `${p.name}: ${p.pyType}` : p.name)).join(', ')}) -> ${returnTypePy}:\n        `;
   }
 }
