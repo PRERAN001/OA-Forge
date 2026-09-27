@@ -123,6 +123,40 @@ export default function TakeOAPage({
     loadSession();
   }, [sessionId]);
 
+  // Fullscreen Enforcement & ESC key exit effect (Top level hook call)
+  useEffect(() => {
+    if (!session || loading) return;
+
+    // Attempt auto entering fullscreen on session ready
+    enterFullscreen();
+
+    const handleFullscreenChange = () => {
+      const isFS = typeof document !== 'undefined' && !!document.fullscreenElement;
+      setIsFullscreen(isFS);
+
+      // If user exits fullscreen mode during active assessment, end assessment immediately
+      if (!isFS && hasEnteredFullscreen && !isFinishedRef.current) {
+        console.warn('User exited fullscreen mode. Ending assessment.');
+        handleFinishAssessment();
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isFinishedRef.current) {
+        console.warn('User pressed Escape. Ending assessment.');
+        handleFinishAssessment();
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [session, loading, hasEnteredFullscreen]);
+
   if (loading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-[#1a1a1a] text-white font-mono text-sm">
@@ -335,6 +369,8 @@ export default function TakeOAPage({
         sessionData: session,
       };
 
+      if (!session?.id) return;
+
       const res = await fetch(`/api/oa/${session.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -349,43 +385,11 @@ export default function TakeOAPage({
       router.push(`/oa/results/${session.id}`);
     } catch (e) {
       console.error('Error completing assessment', e);
-      router.push(`/oa/results/${session.id}`);
+      if (session?.id) {
+        router.push(`/oa/results/${session.id}`);
+      }
     }
   };
-
-  // Fullscreen Enforcement & ESC key exit effect
-  useEffect(() => {
-    if (!session || loading) return;
-
-    // Attempt auto entering fullscreen on session ready
-    enterFullscreen();
-
-    const handleFullscreenChange = () => {
-      const isFS = typeof document !== 'undefined' && !!document.fullscreenElement;
-      setIsFullscreen(isFS);
-
-      // If user exits fullscreen mode during active assessment, end assessment immediately
-      if (!isFS && hasEnteredFullscreen && !isFinishedRef.current) {
-        console.warn('User exited fullscreen mode. Ending assessment.');
-        handleFinishAssessment();
-      }
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isFinishedRef.current) {
-        console.warn('User pressed Escape. Ending assessment.');
-        handleFinishAssessment();
-      }
-    };
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [session, loading, hasEnteredFullscreen]);
 
   const answeredCount = Object.keys(session.submissions).length;
   const totalQuestions = session.questions.length;
