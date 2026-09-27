@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import {
   getUserCredits,
+  fetchUserCreditsFromDB,
   submitQuestionContribution,
   getContributedQuestions,
   ContributedQuestion,
@@ -71,12 +73,21 @@ export default function ContributePage() {
   const [successReward, setSuccessReward] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const { data: session } = useSession();
+
   useEffect(() => {
-    const userState = getUserCredits();
-    setTotalContributed(userState.contributedCount);
-    setCredits(userState.credits);
-    setRecentContributions(getContributedQuestions());
-  }, []);
+    const update = () => {
+      const userState = getUserCredits();
+      setTotalContributed(userState.contributedCount);
+      setCredits(userState.credits);
+      setRecentContributions(getContributedQuestions());
+    };
+    update();
+
+    fetchUserCreditsFromDB(session?.user?.email || undefined).then(update);
+    window.addEventListener('aura_credits_updated', update);
+    return () => window.removeEventListener('aura_credits_updated', update);
+  }, [session?.user?.email]);
 
   const progressInCurrentTier = totalContributed % 3;
   const neededForNextCredit = 3 - progressInCurrentTier;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, useRef, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { OASession, Question, Submission } from '@/types/oa';
 import { getSessionLocal, saveSessionLocal } from '@/lib/sessionStore';
@@ -25,6 +25,8 @@ import {
   X,
   RefreshCw,
   Lock,
+  Maximize,
+  ShieldAlert,
 } from 'lucide-react';
 
 export default function TakeOAPage({
@@ -51,8 +53,23 @@ export default function TakeOAPage({
   const [isRunningTests, setIsRunningTests] = useState(false);
   const [testOutput, setTestOutput] = useState<any>(null);
 
-  // Finish Confirmation Modal
+  // Finish Confirmation Modal & Fullscreen State
   const [showFinishModal, setShowFinishModal] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [hasEnteredFullscreen, setHasEnteredFullscreen] = useState(false);
+  const isFinishedRef = useRef(false);
+
+  const enterFullscreen = async () => {
+    try {
+      if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+        setIsFullscreen(true);
+        setHasEnteredFullscreen(true);
+      }
+    } catch (e) {
+      console.warn('Fullscreen request prevented by browser security policy:', e);
+    }
+  };
 
   useEffect(() => {
     async function loadSession() {
@@ -303,6 +320,15 @@ export default function TakeOAPage({
 
   // Complete & Finish Assessment
   const handleFinishAssessment = async () => {
+    if (isFinishedRef.current) return;
+    isFinishedRef.current = true;
+
+    if (typeof document !== 'undefined' && document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch (e) {}
+    }
+
     try {
       const payload = {
         finishAssessment: true,
@@ -316,7 +342,7 @@ export default function TakeOAPage({
       });
 
       const data = await res.json();
-      if (data.session) {
+      if (data?.session) {
         saveSessionLocal(data.session);
       }
 
@@ -326,6 +352,40 @@ export default function TakeOAPage({
       router.push(`/oa/results/${session.id}`);
     }
   };
+
+  // Fullscreen Enforcement & ESC key exit effect
+  useEffect(() => {
+    if (!session || loading) return;
+
+    // Attempt auto entering fullscreen on session ready
+    enterFullscreen();
+
+    const handleFullscreenChange = () => {
+      const isFS = typeof document !== 'undefined' && !!document.fullscreenElement;
+      setIsFullscreen(isFS);
+
+      // If user exits fullscreen mode during active assessment, end assessment immediately
+      if (!isFS && hasEnteredFullscreen && !isFinishedRef.current) {
+        console.warn('User exited fullscreen mode. Ending assessment.');
+        handleFinishAssessment();
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isFinishedRef.current) {
+        console.warn('User pressed Escape. Ending assessment.');
+        handleFinishAssessment();
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [session, loading, hasEnteredFullscreen]);
 
   const answeredCount = Object.keys(session.submissions).length;
   const totalQuestions = session.questions.length;
@@ -373,7 +433,13 @@ export default function TakeOAPage({
         </div>
 
         {/* Right Section: Timer & Finish Button */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#1e1e1e] border border-[#383838] text-[11px] font-mono text-zinc-400">
+            <Maximize className="h-3 w-3 text-[#ffa116]" />
+            <span>Fullscreen Mode</span>
+            <span className="text-rose-400 text-[10px] ml-1 font-sans">(Pressing ESC Ends OA)</span>
+          </div>
+
           <Timer
             timeLimitMinutes={session.timeLimitMinutes}
             startedAt={session.startedAt}
@@ -722,6 +788,32 @@ export default function TakeOAPage({
                 Finalize & Submit
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Required Overlay Modal */}
+      {!isFullscreen && !isFinishedRef.current && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1a1a1a]/95 backdrop-blur-md p-4">
+          <div className="w-full max-w-md rounded-2xl border border-[#383838] bg-[#282828] p-6 space-y-6 text-center shadow-2xl">
+            <div className="flex flex-col items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#ffa116]/10 border border-[#ffa116]/30">
+                <Maximize className="h-6 w-6 text-[#ffa116]" />
+              </div>
+              <h2 className="text-xl font-bold text-white">Fullscreen Mode Required</h2>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                This online assessment runs in mandatory Fullscreen Mode. Exiting fullscreen or pressing <kbd className="px-1.5 py-0.5 rounded bg-[#1e1e1e] border border-[#383838] text-[#ffa116] font-mono">ESC</kbd> will automatically finalize and submit your assessment.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={enterFullscreen}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#ffa116] px-4 py-3 text-xs font-bold text-[#1a1a1a] hover:bg-[#ffa116]/90 transition shadow-md"
+            >
+              <Maximize className="h-4 w-4" />
+              Click to Enter Fullscreen Assessment
+            </button>
           </div>
         </div>
       )}

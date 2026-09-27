@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut, signIn } from 'next-auth/react';
-import { getUserCredits } from '@/lib/userCredits';
+import { getUserCredits, fetchUserCreditsFromDB } from '@/lib/userCredits';
 import {
   Zap,
   BookOpen,
@@ -30,14 +30,22 @@ export default function Navbar() {
       setCredits(uState.credits);
       setIsUnlimited(uState.isUnlimited);
     };
+
     update();
+
+    // Fetch authentic user credits status from DB on mount / session load
+    fetchUserCreditsFromDB(session?.user?.email || undefined).then((uState) => {
+      setCredits(uState.credits);
+      setIsUnlimited(uState.isUnlimited);
+    });
+
     window.addEventListener('storage', update);
     window.addEventListener('aura_credits_updated', update);
     return () => {
       window.removeEventListener('storage', update);
       window.removeEventListener('aura_credits_updated', update);
     };
-  }, [pathname]);
+  }, [pathname, session?.user?.email, status]);
 
   const isOAActive = pathname.startsWith('/oa/') && !pathname.includes('/results/');
 
