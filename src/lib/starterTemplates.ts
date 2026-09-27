@@ -1,26 +1,117 @@
 import { Question } from '@/types/oa';
 
-export function extractMethodAndParams(question: Question) {
+export interface ParsedParam {
+  name: string;
+  pyType: string;
+}
+
+export interface ParsedSignature {
+  methodName: string;
+  params: ParsedParam[];
+  returnTypePy: string;
+}
+
+export function parsePythonSignature(question: Question): ParsedSignature {
   const entryMatch = question.entryPoint.match(/\.([a-zA-Z0-9_]+)/);
   const methodName = entryMatch ? entryMatch[1] : 'solve';
 
   const starter = question.starterCode || '';
-  const defMatch = starter.match(/def\s+[a-zA-Z0-9_]+\s*\(([^)]*)\)/);
-  let params: string[] = [];
+  
+  // Find def methodName(self, ...) -> ReturnType:
+  const defRegex = new RegExp(`def\\s+${methodName}\\s*\\(([^)]*)\\)(?:\\s*->\\s*([^:]+))?`);
+  const match = starter.match(defRegex) || starter.match(/def\s+[a-zA-Z0-9_]+\s*\(([^)]*)\)(?:\s*->\s*([^:]+))?/);
 
-  if (defMatch && defMatch[1]) {
-    params = defMatch[1]
+  const params: ParsedParam[] = [];
+  let returnTypePy = 'int';
+
+  if (match) {
+    const paramsStr = match[1] || '';
+    if (match[2]) {
+      returnTypePy = match[2].trim();
+    }
+
+    const rawParams = paramsStr
       .split(',')
       .map((p) => p.trim())
-      .filter((p) => p && p !== 'self')
-      .map((p) => p.split(':')[0].trim());
+      .filter((p) => p && p !== 'self');
+
+    for (const raw of rawParams) {
+      if (raw.includes(':')) {
+        const [name, typeStr] = raw.split(':').map((s) => s.trim());
+        params.push({ name, pyType: typeStr });
+      } else {
+        params.push({ name: raw, pyType: '' });
+      }
+    }
   }
 
   if (params.length === 0) {
-    params = ['inputData'];
+    params.push({ name: 'nums', pyType: 'List[int]' });
   }
 
-  return { methodName, params };
+  return { methodName, params, returnTypePy };
+}
+
+export function mapPyTypeToCpp(pyType: string): { type: string; isRef: boolean } {
+  const t = pyType.trim();
+  if (!t) return { type: 'int', isRef: false };
+  if (t === 'int') return { type: 'int', isRef: false };
+  if (t === 'str' || t === 'string') return { type: 'string', isRef: false };
+  if (t === 'bool') return { type: 'bool', isRef: false };
+  if (t === 'float') return { type: 'double', isRef: false };
+  if (t === 'None' || t === 'void') return { type: 'void', isRef: false };
+  if (t.includes('ListNode')) return { type: 'ListNode*', isRef: false };
+  if (t.includes('TreeNode')) return { type: 'TreeNode*', isRef: false };
+
+  // Handle List[T]
+  const listMatch = t.match(/List\[(.*)\]/);
+  if (listMatch) {
+    const inner = mapPyTypeToCpp(listMatch[1]).type;
+    return { type: `vector<${inner}>`, isRef: true };
+  }
+
+  return { type: 'int', isRef: false };
+}
+
+export function mapPyTypeToJava(pyType: string): string {
+  const t = pyType.trim();
+  if (!t) return 'int';
+  if (t === 'int') return 'int';
+  if (t === 'str' || t === 'string') return 'String';
+  if (t === 'bool') return 'boolean';
+  if (t === 'float') return 'double';
+  if (t === 'None' || t === 'void') return 'void';
+  if (t.includes('ListNode')) return 'ListNode';
+  if (t.includes('TreeNode')) return 'TreeNode';
+
+  const listMatch = t.match(/List\[(.*)\]/);
+  if (listMatch) {
+    const inner = mapPyTypeToJava(listMatch[1]);
+    if (inner === 'int') return 'int[]';
+    if (inner === 'String') return 'String[]';
+    if (inner === 'boolean') return 'boolean[]';
+    if (inner === 'double') return 'double[]';
+    return `${inner}[]`;
+  }
+
+  return 'int';
+}
+
+export function mapPyTypeToTs(pyType: string): string {
+  const t = pyType.trim();
+  if (!t) return 'number';
+  if (t === 'int' || t === 'float') return 'number';
+  if (t === 'str' || t === 'string') return 'string';
+  if (t === 'bool') return 'boolean';
+  if (t === 'None' || t === 'void') return 'void';
+
+  const listMatch = t.match(/List\[(.*)\]/);
+  if (listMatch) {
+    const inner = mapPyTypeToTs(listMatch[1]);
+    return `${inner}[]`;
+  }
+
+  return 'any';
 }
 
 export function getStarterTemplate(question: Question, language: string): string {
@@ -28,91 +119,91 @@ export function getStarterTemplate(question: Question, language: string): string
     return question.starterCodes[language];
   }
 
-  const { methodName, params } = extractMethodAndParams(question);
-  const paramList = params.join(', ');
+  const { methodName, params, returnTypePy } = parsePythonSignature(question);
 
   switch (language) {
-    case 'javascript':
-      return `/**
- * Problem: ${question.title}
- * Entry: Solution().${methodName}
- */
-class Solution {
-    ${methodName}(${paramList}) {
-        // Write your solution here
-    }
-}
-`;
+    case 'cpp': {
+      const cppReturn = mapPyTypeToCpp(returnTypePy).type;
+      const cppParams = params
+        .map((p) => {
+          const mapped = mapPyTypeToCpp(p.pyType);
+          const refStr = mapped.isRef ? '&' : '';
+          return `${mapped.type}${refStr} ${p.name}`;
+        })
+        .join(', ');
 
-    case 'typescript':
-      return `/**
- * Problem: ${question.title}
- */
-class Solution {
-    ${methodName}(${params.map((p) => `${p}: any`).join(', ')}): any {
-        // Write your solution here
-    }
-}
-`;
-
-    case 'cpp':
       return `#include <iostream>
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <algorithm>
 
 using namespace std;
 
 class Solution {
 public:
-    // Solve ${question.title}
+    ${cppReturn} ${methodName}(${cppParams}) {
+        // Write your C++ solution here
+        
+    }
 };
-
-int main() {
-    // Fast I/O
-    ios_base::sync_with_stdio(false);
-    cin.tie(NULL);
-
-    // Read input and output result
-    return 0;
-}
 `;
+    }
 
-    case 'java':
+    case 'java': {
+      const javaReturn = mapPyTypeToJava(returnTypePy);
+      const javaParams = params
+        .map((p) => `${mapPyTypeToJava(p.pyType)} ${p.name}`)
+        .join(', ');
+
       return `import java.util.*;
 
-public class Main {
-    public static void main(String[] args) {
-        Scanner scanner = new Scanner(System.in);
-        // Solve ${question.title}
+class Solution {
+    public ${javaReturn} ${methodName}(${javaParams}) {
+        // Write your Java solution here
+        
     }
 }
 `;
+    }
 
-    case 'go':
-      return `package main
+    case 'javascript': {
+      const jsParams = params.map((p) => p.name).join(', ');
 
-import (
-    "fmt"
-)
-
-func main() {
-    // Solve ${question.title}
+      return `/**
+ * Problem: ${question.title}
+ * Entry: Solution().${methodName}
+ */
+class Solution {
+    ${methodName}(${jsParams}) {
+        // Write your JavaScript solution here
+        
+    }
 }
 `;
+    }
 
-    case 'ruby':
-      return `# Problem: ${question.title}
-class Solution
-    def ${methodName}(${paramList})
-        # Write your solution here
-    end
-end
+    case 'typescript': {
+      const tsReturn = mapPyTypeToTs(returnTypePy);
+      const tsParams = params
+        .map((p) => `${p.name}: ${mapPyTypeToTs(p.pyType)}`)
+        .join(', ');
+
+      return `class Solution {
+    ${methodName}(${tsParams}): ${tsReturn} {
+        // Write your TypeScript solution here
+        
+    }
+}
 `;
+    }
 
     case 'python':
     default:
-      return question.starterCode || `class Solution:\n    def ${methodName}(self, ${paramList}):\n        pass\n`;
+      return (
+        question.starterCode ||
+        `class Solution:\n    def ${methodName}(self, ${params.map((p) => (p.pyType ? `${p.name}: ${p.pyType}` : p.name)).join(', ')}) -> ${returnTypePy}:\n        pass\n`
+      );
   }
 }
