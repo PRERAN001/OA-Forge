@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionServer, saveSessionServer } from '@/lib/sessionStore';
 import { OASession, Submission } from '@/types/oa';
+<<<<<<< HEAD
 import { executeOnJudge0 } from '@/lib/judge0';
+=======
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
 
 export async function GET(
   request: NextRequest,
@@ -28,6 +31,10 @@ export async function POST(
   let session = getSessionServer(sessionId);
 
   if (!session) {
+<<<<<<< HEAD
+=======
+    // If not in server memory, client can send session payload to sync
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
     if (body.sessionData) {
       session = body.sessionData as OASession;
     } else {
@@ -35,12 +42,17 @@ export async function POST(
     }
   }
 
+<<<<<<< HEAD
     if (action === 'submit_question') {
+=======
+  if (action === 'submit_question') {
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
     const question = session.questions.find((q) => q.id === questionId);
     if (!question) {
       return NextResponse.json({ error: 'Question not found' }, { status: 400 });
     }
 
+<<<<<<< HEAD
     const code = submission.code || '';
     const lang = submission.language || 'python';
     const testCases = question.inputOutput || [];
@@ -59,12 +71,36 @@ export async function POST(
     const hiddenTotal = hiddenResults.length;
     const hiddenPassed = hiddenResults.filter((r) => r.passed).length;
 
+=======
+    // Mock evaluation of code: if code is non-empty and has structure, simulate sample test passes
+    const code = submission.code || '';
+    const hasCode = code.trim().length > 15;
+    
+    // Evaluate sample input/output test cases
+    const testResults = (question.inputOutput || []).map((io) => {
+      // Mock test pass: if user wrote valid code block
+      const passed = hasCode && !code.includes('raise NotImplementedError') && !code.includes('pass');
+      return {
+        passed,
+        input: io.input,
+        expected: io.output,
+        actual: passed ? io.output : 'Null / Output mismatch',
+      };
+    });
+
+    const passedCount = testResults.filter((r) => r.passed).length;
+    const totalTests = testResults.length || 1;
+    const scoreFraction = passedCount / totalTests;
+    const score = Math.round(question.points * scoreFraction);
+
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
     const fullSubmission: Submission = {
       code,
       language: submission.language || 'python',
       submittedAt: new Date().toISOString(),
       status: 'submitted',
       score,
+<<<<<<< HEAD
       testResults: [
         ...sampleResults.map((r) => ({
           passed: r.passed,
@@ -79,10 +115,17 @@ export async function POST(
           actual: r.passed ? '[Passed]' : '[Failed]',
         })),
       ],
+=======
+      testResults,
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
     };
 
     session.submissions[questionId] = fullSubmission;
 
+<<<<<<< HEAD
+=======
+    // Recalculate total score
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
     session.totalScore = Object.values(session.submissions).reduce(
       (sum, sub) => sum + (sub.score || 0),
       0
@@ -90,6 +133,7 @@ export async function POST(
 
     saveSessionServer(session);
 
+<<<<<<< HEAD
     const clientExecution = {
       status: execResult.status,
       runtime: execResult.runtime,
@@ -109,6 +153,11 @@ export async function POST(
       message: 'Question submitted successfully',
       submission: fullSubmission,
       execution: clientExecution,
+=======
+    return NextResponse.json({
+      message: 'Question submitted successfully',
+      submission: fullSubmission,
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
       session,
     });
   }

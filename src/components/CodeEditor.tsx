@@ -41,8 +41,11 @@ export default function CodeEditor({
     typescript: 'typescript',
     cpp: 'cpp',
     java: 'java',
+<<<<<<< HEAD
     go: 'go',
     ruby: 'ruby',
+=======
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
   };
 
   return (
@@ -62,12 +65,19 @@ export default function CodeEditor({
               className="rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-xs text-zinc-200 focus:border-amber-500 focus:outline-none"
             >
               <option value="python">Python 3</option>
+<<<<<<< HEAD
               <option value="cpp">C++ (GCC 9.2)</option>
               <option value="java">Java (OpenJDK 13)</option>
               <option value="javascript">JavaScript (Node.js)</option>
               <option value="typescript">TypeScript</option>
               <option value="go">Go (1.13)</option>
               <option value="ruby">Ruby (2.7)</option>
+=======
+              <option value="javascript">JavaScript</option>
+              <option value="typescript">TypeScript</option>
+              <option value="cpp">C++</option>
+              <option value="java">Java</option>
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
             </select>
           )}
         </div>

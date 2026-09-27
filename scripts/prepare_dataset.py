@@ -60,7 +60,11 @@ def parse_dataset():
                         input_output = raw.get('input_output', [])
                         formatted_io = []
                         if isinstance(input_output, list):
+<<<<<<< HEAD
                             for io in input_output: # Keep 100% of all test cases
+=======
+                            for io in input_output[:5]: # Keep up to 5 sample test cases
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
                                 if isinstance(io, dict):
                                     formatted_io.append({
                                         'input': str(io.get('input', '')),

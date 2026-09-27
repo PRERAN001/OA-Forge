@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getUserCredits } from '@/lib/userCredits';
+<<<<<<< HEAD
+=======
+import RazorpayPayButton from '@/components/RazorpayPayButton';
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
 import {
   Zap,
   Check,
@@ -30,7 +34,11 @@ export default function PricingPage() {
   const plan = {
     id: 'unlimited_3months_99',
     name: '3 Months Unlimited Pro Pass',
+<<<<<<< HEAD
     price: 99,
+=======
+    price: 1,
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
     credits: 999,
     unlimited: true,
     duration: '3 Months Unlimited Access',
@@ -129,6 +137,7 @@ export default function PricingPage() {
           </div>
         </div>
 
+<<<<<<< HEAD
         <button
           type="button"
           onClick={handleSelectPlan}
@@ -137,6 +146,15 @@ export default function PricingPage() {
           <span>Get 3 Months Unlimited Pass (₹99)</span>
           <ArrowRight className="h-4 w-4" />
         </button>
+=======
+        <RazorpayPayButton
+          planId={plan.id}
+          amount={plan.price}
+          credits={plan.credits}
+          planName={plan.name}
+          buttonText="Pay ₹99 & Unlock 3 Months Pass"
+        />
+>>>>>>> 79805f92759fd023359b1532fe04888b298eff90
 
         <div className="flex items-center justify-center gap-2 text-[11px] text-zinc-500 font-mono text-center">
           <Lock className="h-3.5 w-3.5 text-amber-400" />
