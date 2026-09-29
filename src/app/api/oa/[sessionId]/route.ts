@@ -33,10 +33,14 @@ export async function POST(
   let session = getSessionServer(sessionId);
 
   if (!session) {
+
     session = (await getOASessionFromDB(sessionId)) || undefined;
   }
 
   if (!session) {
+
+    // If not in server memory, client can send session payload to sync
+
     if (body.sessionData) {
       session = body.sessionData as OASession;
     } else {
@@ -44,6 +48,7 @@ export async function POST(
     }
   }
 
+    if (action === 'submit_question') {
   if (action === 'submit_question') {
     const question = session.questions.find((q) => q.id === questionId);
     if (!question) {
@@ -68,6 +73,26 @@ export async function POST(
     const hiddenTotal = hiddenResults.length;
     const hiddenPassed = hiddenResults.filter((r) => r.passed).length;
 
+
+    const code = submission.code || '';
+    const hasCode = code.trim().length > 15;
+
+    const testResults = (question.inputOutput || []).map((io) => {
+      const passed = hasCode && !code.includes('raise NotImplementedError') && !code.includes('pass');
+      return {
+        passed,
+        input: io.input,
+        expected: io.output,
+        actual: passed ? io.output : 'Null / Output mismatch',
+      };
+    });
+
+    const passedCount = testResults.filter((r) => r.passed).length;
+    const totalTests = testResults.length || 1;
+    const scoreFraction = passedCount / totalTests;
+    const score = Math.round(question.points * scoreFraction);
+
+
     const fullSubmission: Submission = {
       code,
       language: submission.language || 'python',
@@ -88,9 +113,11 @@ export async function POST(
           actual: r.passed ? '[Passed]' : '[Failed]',
         })),
       ],
+      testResults,
     };
 
     session.submissions[questionId] = fullSubmission;
+
 
     session.totalScore = Object.values(session.submissions).reduce(
       (sum, sub) => sum + (sub.score || 0),
@@ -119,6 +146,9 @@ export async function POST(
       message: 'Question submitted successfully',
       submission: fullSubmission,
       execution: clientExecution,
+      return NextResponse.json({
+      message: 'Question submitted successfully',
+      submission: fullSubmission,
       session,
     });
   }
