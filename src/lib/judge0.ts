@@ -1349,12 +1349,13 @@ export async function executeOnJudge0(
     }
   }
 
-  const endpoint = `${JUDGE0_BASE_URL}/submissions?base64_encoded=false&wait=true`;
+  const endpoint = `${JUDGE0_BASE_URL}/submissions?base64_encoded=false&wait=false`;
 
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'X-Auth-Token': 'e40515c62071ceaf660b59f74b12d5e1',
     },
     body: JSON.stringify({
       source_code: sourceCode,
