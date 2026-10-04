@@ -55,7 +55,7 @@ export default function TakeOAPage({
 
   // Finish Confirmation Modal & Fullscreen State
   const [showFinishModal, setShowFinishModal] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(true);
   const [hasEnteredFullscreen, setHasEnteredFullscreen] = useState(false);
   const isFinishedRef = useRef(false);
 
