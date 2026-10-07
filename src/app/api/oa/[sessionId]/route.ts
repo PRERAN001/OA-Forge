@@ -13,8 +13,9 @@ export async function GET(
 
   // If not found in memory, try to fetch from database
   if (!session) {
-    session = await getOASessionFromDB(sessionId);
-    if (session) {
+    const dbSession = await getOASessionFromDB(sessionId);
+    if (dbSession) {
+      session = dbSession;
       // Cache it in memory for future requests
       saveSessionServer(session);
     }
@@ -39,8 +40,9 @@ export async function POST(
 
   // If not found in memory, try to fetch from database
   if (!session) {
-    session = await getOASessionFromDB(sessionId);
-    if (session) {
+    const dbSession = await getOASessionFromDB(sessionId);
+    if (dbSession) {
+      session = dbSession;
       // Cache it in memory for future requests
       saveSessionServer(session);
     }

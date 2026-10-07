@@ -7,8 +7,8 @@ export function saveSessionServer(session: OASession) {
   globalSessions[session.id] = session;
 }
 
-export function getSessionServer(id: string): OASession | undefined {
-  return globalSessions[id];
+export function getSessionServer(id: string): OASession | null | undefined {
+  return globalSessions[id] ?? null;
 }
 
 // Client-side local storage helpers
