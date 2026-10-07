@@ -1349,12 +1349,13 @@ export async function executeOnJudge0(
     }
   }
 
-  const endpoint = `${JUDGE0_BASE_URL}/submissions?base64_encoded=false&wait=true`;
+  const endpoint = `${JUDGE0_BASE_URL}/submissions?base64_encoded=false&wait=false`;
 
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'X-Auth-Token': 'e40515c62071ceaf660b59f74b12d5e1',
     },
     body: JSON.stringify({
       source_code: sourceCode,
@@ -1375,7 +1376,31 @@ export async function executeOnJudge0(
     };
   }
 
-  const result = await response.json();
+  const { token } = await response.json();
+
+  let result: any = null;
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const res = await fetch(
+      `${JUDGE0_BASE_URL}/submissions/${token}?base64_encoded=false`,
+      { headers: { 'X-Auth-Token': 'e40515c62071ceaf660b59f74b12d5e1' } }
+    );
+    if (!res.ok) {
+      return {
+        status: 'ERROR', results: [], runtime: '0 ms', memory: '0 MB',
+        error: `Judge0 poll error (${res.status}): ${await res.text()}`,
+      };
+    }
+    result = await res.json();
+    if (result.status?.id >= 3) break; // 1 = queued, 2 = processing
+  }
+  
+  if (!result || result.status?.id < 3) {
+    return {
+      status: 'ERROR', results: [], runtime: '0 ms', memory: '0 MB',
+      error: 'Timed out waiting for Judge0 to finish.',
+    };
+  }
 
   if (result.compile_output || (result.stderr && !result.stdout)) {
     return {

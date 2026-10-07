@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionServer, saveSessionServer } from '@/lib/sessionStore';
-import { saveOASessionToDB, getOASessionFromDB } from '@/lib/dbServices';
 import { OASession, Submission } from '@/types/oa';
 import { executeOnJudge0 } from '@/lib/judge0';
 
@@ -9,11 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   const { sessionId } = await params;
-  let session = getSessionServer(sessionId);
-
-  if (!session) {
-    session = (await getOASessionFromDB(sessionId)) || undefined;
-  }
+  const session = getSessionServer(sessionId);
 
   if (!session) {
     return NextResponse.json({ error: 'Session not found' }, { status: 404 });
@@ -33,11 +28,6 @@ export async function POST(
   let session = getSessionServer(sessionId);
 
   if (!session) {
-    session = (await getOASessionFromDB(sessionId)) || undefined;
-  }
-
-  if (!session) {
-    // If not in server memory, client can send session payload to sync
     if (body.sessionData) {
       session = body.sessionData as OASession;
     } else {
@@ -45,7 +35,7 @@ export async function POST(
     }
   }
 
-  if (action === 'submit_question') {
+    if (action === 'submit_question') {
     const question = session.questions.find((q) => q.id === questionId);
     if (!question) {
       return NextResponse.json({ error: 'Question not found' }, { status: 400 });
@@ -99,7 +89,6 @@ export async function POST(
     );
 
     saveSessionServer(session);
-    await saveOASessionToDB(session);
 
     const clientExecution = {
       status: execResult.status,
@@ -127,14 +116,14 @@ export async function POST(
   if (finishAssessment) {
     session.status = 'completed';
     session.completedAt = new Date().toISOString();
-
+    
+    // Calculate final score across all questions
     session.totalScore = Object.values(session.submissions).reduce(
       (sum, sub) => sum + (sub.score || 0),
       0
     );
 
     saveSessionServer(session);
-    await saveOASessionToDB(session);
 
     return NextResponse.json({
       message: 'Assessment completed successfully',

@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef, use } from 'react';
-import { useRouter } from 'next/navigation';
-import { OASession, Question, Submission } from '@/types/oa';
-import { getSessionLocal, saveSessionLocal } from '@/lib/sessionStore';
-import { getStarterTemplate } from '@/lib/starterTemplates';
-import DifficultyBadge from '@/components/DifficultyBadge';
-import CodeEditor from '@/components/CodeEditor';
-import Timer from '@/components/Timer';
+import { useState, useEffect, useRef, use, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { OASession } from "@/types/oa";
+import { getSessionLocal, saveSessionLocal } from "@/lib/sessionStore";
+import { getStarterTemplate } from "@/lib/starterTemplates";
+import DifficultyBadge from "@/components/DifficultyBadge";
+import CodeEditor from "@/components/CodeEditor";
+import Timer from "@/components/Timer";
 import {
   CheckCircle2,
   AlertCircle,
@@ -15,9 +15,6 @@ import {
   Send,
   ArrowRight,
   ArrowLeft,
-  Clock,
-  Award,
-  ChevronRight,
   Terminal,
   FileText,
   Sparkles,
@@ -26,8 +23,60 @@ import {
   RefreshCw,
   Lock,
   Maximize,
-  ShieldAlert,
-} from 'lucide-react';
+} from "lucide-react";
+
+type OutputState = "passed" | "failed" | "error";
+
+type TestResult = {
+  id?: string | number;
+  passed?: boolean;
+  input?: string;
+  expected?: string;
+  actual?: string;
+  error?: unknown;
+};
+
+type TestOutput = {
+  error?: unknown;
+  status?: string;
+  runtime?: string | number;
+  memory?: string | number;
+  results?: TestResult[];
+  totalTests?: number;
+  totalPassed?: number;
+  hiddenStats?: {
+    total: number;
+    passed: number;
+    allPassed: boolean;
+  };
+};
+
+// Normalizes any execution outcome (Judge0 status strings, API errors, etc.)
+const getOutputState = (o: TestOutput | null): OutputState => {
+  if (!o) return "failed";
+  if (
+    o.error ||
+    o.status === "ERROR" ||
+    /error/i.test(String(o.status || ""))
+  ) {
+    return "error";
+  }
+  const allSample =
+    Array.isArray(o.results) &&
+    o.results.length > 0 &&
+    o.results.every((r) => r.passed);
+  const allHidden = o.hiddenStats ? o.hiddenStats.allPassed : true;
+  return allSample && allHidden ? "passed" : "failed";
+};
+
+const formatError = (err: unknown): string => {
+  if (typeof err === "string") return err;
+  try {
+    return JSON.stringify(err, null, 2);
+  } catch {
+    return String(err);
+  }
+};
 
 export default function TakeOAPage({
   params,
@@ -46,30 +95,88 @@ export default function TakeOAPage({
   const [languageMap, setLanguageMap] = useState<Record<number, string>>({});
 
   // Active Tab in Left Column (Problem vs Test Console)
-  const [leftTab, setLeftTab] = useState<'problem' | 'console'>('problem');
+  const [leftTab, setLeftTab] = useState<"problem" | "console">("problem");
 
   // Execution & Submission feedback
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRunningTests, setIsRunningTests] = useState(false);
-  const [testOutput, setTestOutput] = useState<any>(null);
+  const [testOutput, setTestOutput] = useState<TestOutput | null>(null);
 
   // Finish Confirmation Modal & Fullscreen State
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [hasEnteredFullscreen, setHasEnteredFullscreen] = useState(false);
+  const [fsSupported, setFsSupported] = useState(false);
+  const [fsError, setFsError] = useState("");
   const isFinishedRef = useRef(false);
+  const [isFinished, setIsFinished] = useState(false);
 
   const enterFullscreen = async () => {
+    setFsError("");
     try {
-      if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
+      if (
+        typeof document !== "undefined" &&
+        document.documentElement.requestFullscreen
+      ) {
+        setFsSupported(true);
         await document.documentElement.requestFullscreen();
         setIsFullscreen(true);
         setHasEnteredFullscreen(true);
+      } else {
+        setFsSupported(false);
+        setFsError("Fullscreen is not supported by this browser.");
       }
-    } catch (e) {
-      console.warn('Fullscreen request prevented by browser security policy:', e);
+    } catch (error) {
+      setFsError(
+        error instanceof Error
+          ? error.message
+          : "Could not enter fullscreen mode.",
+      );
+      console.warn(
+        "Fullscreen request prevented by browser security policy:",
+        error,
+      );
     }
   };
+
+  const handleFinishAssessment = useCallback(async () => {
+    if (isFinishedRef.current) return;
+    isFinishedRef.current = true;
+    setIsFinished(true);
+
+    if (typeof document !== "undefined" && document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch {}
+    }
+
+    try {
+      const payload = {
+        finishAssessment: true,
+        sessionData: session,
+      };
+
+      if (!session?.id) return;
+
+      const res = await fetch(`/api/oa/${session.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (data?.session) {
+        saveSessionLocal(data.session);
+      }
+
+      router.push(`/oa/results/${session.id}`);
+    } catch (error) {
+      console.error("Error completing assessment", error);
+      if (session?.id) {
+        router.push(`/oa/results/${session.id}`);
+      }
+    }
+  }, [router, session]);
 
   useEffect(() => {
     async function loadSession() {
@@ -84,7 +191,7 @@ export default function TakeOAPage({
             sess = await res.json();
           }
         } catch (e) {
-          console.error('Failed to fetch session from API', e);
+          console.error("Failed to fetch session from API", e);
         }
       }
 
@@ -95,15 +202,19 @@ export default function TakeOAPage({
 
         sess.questions.forEach((q) => {
           const existing = sess.submissions[q.id];
-          const savedLang = typeof window !== 'undefined'
-            ? localStorage.getItem(`oaforge_lang_${sessionId}_${q.id}`)
-            : null;
-          const lang = savedLang || (existing ? existing.language : 'python');
+          const savedLang =
+            typeof window !== "undefined"
+              ? localStorage.getItem(`oaforge_lang_${sessionId}_${q.id}`)
+              : null;
+          const lang = savedLang || (existing ? existing.language : "python");
           initialLang[q.id] = lang;
 
-          const savedCode = typeof window !== 'undefined'
-            ? localStorage.getItem(`oaforge_code_${sessionId}_${q.id}_${lang}`)
-            : null;
+          const savedCode =
+            typeof window !== "undefined"
+              ? localStorage.getItem(
+                  `oaforge_code_${sessionId}_${q.id}_${lang}`,
+                )
+              : null;
 
           if (savedCode !== null) {
             initialCode[q.id] = savedCode;
@@ -127,35 +238,39 @@ export default function TakeOAPage({
   useEffect(() => {
     if (!session || loading) return;
 
-    // Attempt auto entering fullscreen on session ready
-    enterFullscreen();
+    // Defer the request so the effect only subscribes to browser events
+    const fullscreenRequest = window.setTimeout(() => {
+      void enterFullscreen();
+    }, 0);
 
     const handleFullscreenChange = () => {
-      const isFS = typeof document !== 'undefined' && !!document.fullscreenElement;
+      const isFS =
+        typeof document !== "undefined" && !!document.fullscreenElement;
       setIsFullscreen(isFS);
 
       // If user exits fullscreen mode during active assessment, end assessment immediately
       if (!isFS && hasEnteredFullscreen && !isFinishedRef.current) {
-        console.warn('User exited fullscreen mode. Ending assessment.');
+        console.warn("User exited fullscreen mode. Ending assessment.");
         handleFinishAssessment();
       }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isFinishedRef.current) {
-        console.warn('User pressed Escape. Ending assessment.');
+      if (e.key === "Escape" && !isFinishedRef.current) {
+        console.warn("User pressed Escape. Ending assessment.");
         handleFinishAssessment();
       }
     };
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    window.addEventListener('keydown', handleKeyDown);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      window.removeEventListener('keydown', handleKeyDown);
+      window.clearTimeout(fullscreenRequest);
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [session, loading, hasEnteredFullscreen]);
+  }, [session, loading, hasEnteredFullscreen, handleFinishAssessment]);
 
   if (loading) {
     return (
@@ -174,10 +289,11 @@ export default function TakeOAPage({
         <AlertCircle className="h-12 w-12 text-rose-500" />
         <h1 className="text-2xl font-bold">Assessment Session Not Found</h1>
         <p className="text-zinc-400 max-w-md text-sm">
-          The requested assessment session could not be retrieved. It may have expired or been deleted.
+          The requested assessment session could not be retrieved. It may have
+          expired or been deleted.
         </p>
         <button
-          onClick={() => router.push('/')}
+          onClick={() => router.push("/")}
           className="px-4 py-2 rounded-lg bg-[#ffa116] text-[#1a1a1a] font-bold text-sm"
         >
           Return to OA Builder
@@ -187,30 +303,41 @@ export default function TakeOAPage({
   }
 
   const currentQuestion = session.questions[activeQuestionIndex];
-  const currentCode = codeMap[currentQuestion.id] || '';
-  const currentLanguage = languageMap[currentQuestion.id] || 'python';
+  const currentCode = codeMap[currentQuestion.id] || "";
+  const currentLanguage = languageMap[currentQuestion.id] || "python";
   const currentSubmission = session.submissions[currentQuestion.id];
 
   const handleCodeChange = (val: string) => {
     setCodeMap((prev) => ({ ...prev, [currentQuestion.id]: val }));
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       try {
-        localStorage.setItem(`oaforge_code_${sessionId}_${currentQuestion.id}_${currentLanguage}`, val);
-      } catch (e) {}
+        localStorage.setItem(
+          `oaforge_code_${sessionId}_${currentQuestion.id}_${currentLanguage}`,
+          val,
+        );
+      } catch {}
     }
   };
 
   const handleLanguageChange = (newLang: string) => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       try {
-        localStorage.setItem(`oaforge_code_${sessionId}_${currentQuestion.id}_${currentLanguage}`, currentCode);
-        localStorage.setItem(`oaforge_lang_${sessionId}_${currentQuestion.id}`, newLang);
-      } catch (e) {}
+        localStorage.setItem(
+          `oaforge_code_${sessionId}_${currentQuestion.id}_${currentLanguage}`,
+          currentCode,
+        );
+        localStorage.setItem(
+          `oaforge_lang_${sessionId}_${currentQuestion.id}`,
+          newLang,
+        );
+      } catch {}
     }
 
     let nextCode: string | null = null;
-    if (typeof window !== 'undefined') {
-      nextCode = localStorage.getItem(`oaforge_code_${sessionId}_${currentQuestion.id}_${newLang}`);
+    if (typeof window !== "undefined") {
+      nextCode = localStorage.getItem(
+        `oaforge_code_${sessionId}_${currentQuestion.id}_${newLang}`,
+      );
     }
 
     if (nextCode === null) {
@@ -228,29 +355,46 @@ export default function TakeOAPage({
   const switchQuestion = (newIdx: number) => {
     if (newIdx === activeQuestionIndex) return;
 
-    if (typeof window !== 'undefined' && currentQuestion) {
+    if (typeof window !== "undefined" && currentQuestion) {
       try {
-        localStorage.setItem(`oaforge_code_${sessionId}_${currentQuestion.id}_${currentLanguage}`, currentCode);
-      } catch (e) {}
+        localStorage.setItem(
+          `oaforge_code_${sessionId}_${currentQuestion.id}_${currentLanguage}`,
+          currentCode,
+        );
+      } catch {}
     }
 
     const destQuestion = session?.questions[newIdx];
     if (destQuestion) {
-      const savedLang = typeof window !== 'undefined'
-        ? localStorage.getItem(`oaforge_lang_${sessionId}_${destQuestion.id}`)
-        : null;
-      const targetLang = savedLang || languageMap[destQuestion.id] || (session?.submissions[destQuestion.id]?.language) || 'python';
+      const savedLang =
+        typeof window !== "undefined"
+          ? localStorage.getItem(`oaforge_lang_${sessionId}_${destQuestion.id}`)
+          : null;
+      const targetLang =
+        savedLang ||
+        languageMap[destQuestion.id] ||
+        session?.submissions[destQuestion.id]?.language ||
+        "python";
 
-      const savedCode = typeof window !== 'undefined'
-        ? localStorage.getItem(`oaforge_code_${sessionId}_${destQuestion.id}_${targetLang}`)
-        : null;
+      const savedCode =
+        typeof window !== "undefined"
+          ? localStorage.getItem(
+              `oaforge_code_${sessionId}_${destQuestion.id}_${targetLang}`,
+            )
+          : null;
 
       let targetCode: string;
       if (savedCode !== null) {
         targetCode = savedCode;
-      } else if (session?.submissions[destQuestion.id] && session.submissions[destQuestion.id].language === targetLang) {
+      } else if (
+        session?.submissions[destQuestion.id] &&
+        session.submissions[destQuestion.id].language === targetLang
+      ) {
         targetCode = session.submissions[destQuestion.id].code;
-      } else if (codeMap[destQuestion.id] && languageMap[destQuestion.id] === targetLang) {
+      } else if (
+        codeMap[destQuestion.id] &&
+        languageMap[destQuestion.id] === targetLang
+      ) {
         targetCode = codeMap[destQuestion.id];
       } else {
         targetCode = getStarterTemplate(destQuestion, targetLang);
@@ -262,18 +406,18 @@ export default function TakeOAPage({
 
     setActiveQuestionIndex(newIdx);
     setTestOutput(null);
-    setLeftTab('problem');
+    setLeftTab("problem");
   };
 
   // Run Sample Test Cases
   const handleRunSampleTests = async () => {
     setIsRunningTests(true);
-    setLeftTab('console');
+    setLeftTab("console");
 
     try {
-      const res = await fetch('/api/oa/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/oa/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           questionId: currentQuestion.id,
           code: currentCode,
@@ -281,32 +425,26 @@ export default function TakeOAPage({
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setTestOutput({
+          status: "ERROR",
+          error: data.details || data.error || `Request failed (${res.status})`,
+          results: [],
+        });
+        return;
+      }
+
       setTestOutput(data);
     } catch (e) {
-      // Fallback visual simulation if API runner not available
-      const sampleCases = currentQuestion.inputOutput || [];
-      const hasCode = currentCode.trim().length > 15;
-
-      const results = sampleCases.map((sample, idx) => {
-        const passed =
-          hasCode &&
-          !currentCode.includes('raise NotImplementedError') &&
-          !currentCode.includes('pass');
-        return {
-          id: idx + 1,
-          input: sample.input,
-          expected: sample.output,
-          actual: passed ? sample.output : 'Output mismatch / Error',
-          passed,
-        };
-      });
-
       setTestOutput({
-        status: results.every((r) => r.passed) ? 'PASSED' : 'FAILED',
-        results,
-        runtime: `${Math.floor(Math.random() * 40 + 10)} ms`,
-        memory: `${(Math.random() * 5 + 14).toFixed(1)} MB`,
+        status: "ERROR",
+        error:
+          e instanceof Error
+            ? e.message
+            : "Network error: could not reach the code runner.",
+        results: [],
       });
     } finally {
       setIsRunningTests(false);
@@ -318,7 +456,7 @@ export default function TakeOAPage({
     setIsSubmitting(true);
     try {
       const payload = {
-        action: 'submit_question',
+        action: "submit_question",
         questionId: currentQuestion.id,
         submission: {
           code: currentCode,
@@ -328,71 +466,49 @@ export default function TakeOAPage({
       };
 
       const res = await fetch(`/api/oa/${session.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-      if (res.ok && data.session) {
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setTestOutput({
+          status: "ERROR",
+          error: data.details || data.error || `Submit failed (${res.status})`,
+          results: [],
+        });
+        setLeftTab("console");
+        return;
+      }
+
+      if (data.session) {
         setSession(data.session);
         saveSessionLocal(data.session);
+      }
 
-        if (data.execution) {
-          setTestOutput(data.execution);
-          setLeftTab('console');
-        } else {
-          handleRunSampleTests();
-        }
+      if (data.execution) {
+        setTestOutput(data.execution);
+        setLeftTab("console");
       }
     } catch (e) {
-      console.error('Error submitting code', e);
+      console.error("Error submitting code", e);
+      setTestOutput({
+        status: "ERROR",
+        error:
+          e instanceof Error ? e.message : "Network error while submitting.",
+        results: [],
+      });
+      setLeftTab("console");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Complete & Finish Assessment
-  const handleFinishAssessment = async () => {
-    if (isFinishedRef.current) return;
-    isFinishedRef.current = true;
-
-    if (typeof document !== 'undefined' && document.fullscreenElement) {
-      try {
-        await document.exitFullscreen();
-      } catch (e) {}
-    }
-
-    try {
-      const payload = {
-        finishAssessment: true,
-        sessionData: session,
-      };
-
-      if (!session?.id) return;
-
-      const res = await fetch(`/api/oa/${session.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (data?.session) {
-        saveSessionLocal(data.session);
-      }
-
-      router.push(`/oa/results/${session.id}`);
-    } catch (e) {
-      console.error('Error completing assessment', e);
-      if (session?.id) {
-        router.push(`/oa/results/${session.id}`);
-      }
-    }
-  };
-
   const answeredCount = Object.keys(session.submissions).length;
   const totalQuestions = session.questions.length;
+  const outputState = getOutputState(testOutput);
 
   return (
     <div className="flex flex-col h-screen w-full bg-[#1a1a1a] text-zinc-100 overflow-hidden select-none">
@@ -413,7 +529,7 @@ export default function TakeOAPage({
           <div className="flex items-center gap-1.5">
             {session.questions.map((q, idx) => {
               const sub = session.submissions[q.id];
-              const isSubmitted = sub && sub.status === 'submitted';
+              const isSubmitted = sub && sub.status === "submitted";
               const isActive = idx === activeQuestionIndex;
 
               return (
@@ -422,10 +538,10 @@ export default function TakeOAPage({
                   onClick={() => switchQuestion(idx)}
                   className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-mono font-medium transition ${
                     isActive
-                      ? 'bg-[#ffa116] text-[#1a1a1a] font-bold shadow'
+                      ? "bg-[#ffa116] text-[#1a1a1a] font-bold shadow"
                       : isSubmitted
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                      : 'bg-[#1e1e1e] text-zinc-400 hover:text-white'
+                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                        : "bg-[#1e1e1e] text-zinc-400 hover:text-white"
                   }`}
                 >
                   <span>Q{idx + 1}</span>
@@ -441,7 +557,9 @@ export default function TakeOAPage({
           <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#1e1e1e] border border-[#383838] text-[11px] font-mono text-zinc-400">
             <Maximize className="h-3 w-3 text-[#ffa116]" />
             <span>Fullscreen Mode</span>
-            <span className="text-rose-400 text-[10px] ml-1 font-sans">(Pressing ESC Ends OA)</span>
+            <span className="text-rose-400 text-[10px] ml-1 font-sans">
+              (Pressing ESC Ends OA)
+            </span>
           </div>
 
           <Timer
@@ -451,7 +569,11 @@ export default function TakeOAPage({
           />
 
           <div className="text-xs font-mono text-zinc-400 hidden sm:block">
-            Score: <span className="text-[#ffa116] font-bold">{session.totalScore}</span> / {session.maxScore} pts
+            Score:{" "}
+            <span className="text-[#ffa116] font-bold">
+              {session.totalScore}
+            </span>{" "}
+            / {session.maxScore} pts
           </div>
 
           <button
@@ -471,22 +593,22 @@ export default function TakeOAPage({
           {/* Left Column Tabs Header */}
           <div className="flex items-center border-b border-[#383838] bg-[#282828] px-4 pt-2">
             <button
-              onClick={() => setLeftTab('problem')}
+              onClick={() => setLeftTab("problem")}
               className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-semibold transition ${
-                leftTab === 'problem'
-                  ? 'border-[#ffa116] text-[#ffa116]'
-                  : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                leftTab === "problem"
+                  ? "border-[#ffa116] text-[#ffa116]"
+                  : "border-transparent text-zinc-400 hover:text-zinc-200"
               }`}
             >
               <FileText className="h-4 w-4" />
               Problem Description
             </button>
             <button
-              onClick={() => setLeftTab('console')}
+              onClick={() => setLeftTab("console")}
               className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-semibold transition ${
-                leftTab === 'console'
-                  ? 'border-[#ffa116] text-[#ffa116]'
-                  : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                leftTab === "console"
+                  ? "border-[#ffa116] text-[#ffa116]"
+                  : "border-transparent text-zinc-400 hover:text-zinc-200"
               }`}
             >
               <Terminal className="h-4 w-4" />
@@ -494,7 +616,11 @@ export default function TakeOAPage({
               {testOutput && (
                 <span
                   className={`h-2 w-2 rounded-full ${
-                    testOutput.status === 'PASSED' ? 'bg-emerald-400' : 'bg-rose-400'
+                    outputState === "passed"
+                      ? "bg-emerald-400"
+                      : outputState === "error"
+                        ? "bg-amber-400"
+                        : "bg-rose-400"
                   }`}
                 />
               )}
@@ -503,7 +629,7 @@ export default function TakeOAPage({
 
           {/* Left Column Content */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-zinc-800">
-            {leftTab === 'problem' ? (
+            {leftTab === "problem" ? (
               <div className="space-y-6">
                 {/* Problem Header */}
                 <div className="space-y-3">
@@ -533,10 +659,13 @@ export default function TakeOAPage({
                   <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 text-emerald-300 font-medium">
                       <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                      Submitted Solution ({currentSubmission.score} / {currentQuestion.points} pts)
+                      Submitted Solution ({currentSubmission.score} /{" "}
+                      {currentQuestion.points} pts)
                     </div>
                     <span className="text-emerald-400/80 font-mono">
-                      {new Date(currentSubmission.submittedAt).toLocaleTimeString()}
+                      {new Date(
+                        currentSubmission.submittedAt,
+                      ).toLocaleTimeString()}
                     </span>
                   </div>
                 )}
@@ -547,33 +676,40 @@ export default function TakeOAPage({
                 </div>
 
                 {/* Sample Test Cases Section */}
-                {currentQuestion.inputOutput && currentQuestion.inputOutput.length > 0 && (
-                  <div className="space-y-3 border-t border-[#383838] pt-6">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                      Sample Examples
-                    </h3>
-                    <div className="space-y-3">
-                      {currentQuestion.inputOutput.map((io, i) => (
-                        <div
-                          key={i}
-                          className="rounded-xl border border-[#383838] bg-[#1e1e1e] p-3.5 space-y-2 font-mono text-xs"
-                        >
-                          <div className="text-zinc-400 font-semibold text-[11px]">
-                            Example {i + 1}:
+                {currentQuestion.inputOutput &&
+                  currentQuestion.inputOutput.length > 0 && (
+                    <div className="space-y-3 border-t border-[#383838] pt-6">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                        Sample Examples
+                      </h3>
+                      <div className="space-y-3">
+                        {currentQuestion.inputOutput.map((io, i) => (
+                          <div
+                            key={i}
+                            className="rounded-xl border border-[#383838] bg-[#1e1e1e] p-3.5 space-y-2 font-mono text-xs"
+                          >
+                            <div className="text-zinc-400 font-semibold text-[11px]">
+                              Example {i + 1}:
+                            </div>
+                            <div>
+                              <span className="text-zinc-500 block text-[10px] uppercase">
+                                Input
+                              </span>
+                              <span className="text-[#ffa116]">{io.input}</span>
+                            </div>
+                            <div>
+                              <span className="text-zinc-500 block text-[10px] uppercase">
+                                Output
+                              </span>
+                              <span className="text-emerald-300">
+                                {io.output}
+                              </span>
+                            </div>
                           </div>
-                          <div>
-                            <span className="text-zinc-500 block text-[10px] uppercase">Input</span>
-                            <span className="text-[#ffa116]">{io.input}</span>
-                          </div>
-                          <div>
-                            <span className="text-zinc-500 block text-[10px] uppercase">Output</span>
-                            <span className="text-emerald-300">{io.output}</span>
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </div>
             ) : (
               /* Test Console View */
@@ -584,8 +720,22 @@ export default function TakeOAPage({
                   </h3>
                   {testOutput && (
                     <div className="flex items-center gap-3 text-xs">
-                      <span>Runtime: <strong className="text-[#ffa116]">{testOutput.runtime}</strong></span>
-                      <span>Memory: <strong className="text-[#ffa116]">{testOutput.memory}</strong></span>
+                      {testOutput.runtime && (
+                        <span>
+                          Runtime:{" "}
+                          <strong className="text-[#ffa116]">
+                            {testOutput.runtime}
+                          </strong>
+                        </span>
+                      )}
+                      {testOutput.memory && (
+                        <span>
+                          Memory:{" "}
+                          <strong className="text-[#ffa116]">
+                            {testOutput.memory}
+                          </strong>
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -597,26 +747,34 @@ export default function TakeOAPage({
                   </div>
                 ) : !testOutput ? (
                   <div className="py-12 text-center text-xs text-zinc-500">
-                    Click &quot;Run Sample Tests&quot; or &quot;Submit Solution&quot; to see test execution results here.
+                    Click &quot;Run Sample Tests&quot; or &quot;Submit
+                    Solution&quot; to see test execution results here.
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {/* Status Banner */}
+                    {/* Status banner */}
                     <div
                       className={`rounded-lg border p-3 text-xs font-bold flex items-center gap-2 ${
-                        testOutput.status === 'PASSED'
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                          : testOutput.status === 'ERROR'
-                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                          : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                        outputState === "passed"
+                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                          : outputState === "error"
+                            ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                            : "bg-rose-500/10 text-rose-400 border-rose-500/30"
                       }`}
                     >
-                      {testOutput.status === 'PASSED' ? (
+                      {outputState === "passed" ? (
                         <>
                           <CheckCircle2 className="h-4 w-4" />
-                          All Sample Test Cases Passed!
+                          All Test Cases Passed!
                         </>
-                      ) : testOutput.status === 'ERROR' ? (
+                      ) : outputState === "error" ? (
+                        <>
+                          <AlertCircle className="h-4 w-4" />
+                          {testOutput.status && testOutput.status !== "ERROR"
+                            ? testOutput.status
+                            : "Execution Error"}
+                        </>
+                      ) : testOutput.status === "ERROR" ? (
                         <>
                           <AlertCircle className="h-4 w-4" />
                           Compilation / Runtime Error
@@ -624,23 +782,112 @@ export default function TakeOAPage({
                       ) : (
                         <>
                           <AlertCircle className="h-4 w-4" />
-                          Test Execution Mismatch — {testOutput.results?.filter((r: any) => r.passed).length ?? 0}/{testOutput.results?.length ?? 0} passed
+                          Wrong Answer
                         </>
                       )}
                     </div>
 
-                    {/* Error Output Block (compile errors, stderr, runtime crashes) */}
-                    {testOutput.status === 'ERROR' && testOutput.error && (
-                      <div className="rounded-lg border border-amber-500/30 bg-[#1a1206] p-3 text-xs space-y-1.5">
-                        <div className="flex items-center gap-1.5 text-amber-400 font-bold text-[10px] uppercase tracking-wider">
-                          <Terminal className="h-3.5 w-3.5" />
-                          Error Output
-                        </div>
+                    {/* Top-level error: compile error, Judge0 failure, timeout, etc. */}
+                    {Boolean(testOutput.error) && (
+                      <pre className="whitespace-pre-wrap wrap-break-word rounded-lg border border-amber-500/30 bg-[#1e1e1e] p-3 text-[11px] leading-relaxed text-amber-300 overflow-x-auto">
+                        {formatError(testOutput.error)}
+                      </pre>
+                    )}
+
+                    {/* Summary across all tests */}
+                    {(testOutput.totalTests ?? 0) > 0 && (
+                      <div className="text-xs text-zinc-400">
+                        Passed {testOutput.totalPassed ?? 0} /{" "}
+                        {testOutput.totalTests ?? 0} total tests
+                        {(testOutput.hiddenStats?.total ?? 0) > 0 && (
+                          <>
+                            {" "}
+                            · Hidden: {testOutput.hiddenStats?.passed ?? 0} /{" "}
+                            {testOutput.hiddenStats?.total ?? 0}
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Per-case results */}
+                    {testOutput.results && testOutput.results.length > 0 && (
+                      <div className="space-y-2">
+                        {testOutput.results.map((res, idx: number) => (
+                          <div
+                            key={res.id ?? idx}
+                            className="rounded-lg border border-[#383838] bg-[#1e1e1e] p-3 text-xs space-y-1.5"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-zinc-400 font-bold">
+                                Case {res.id ?? idx + 1}
+                              </span>
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                                  res.passed
+                                    ? "bg-emerald-500/20 text-emerald-400"
+                                    : "bg-rose-500/20 text-rose-400"
+                                }`}
+                              >
+                                {res.passed ? "PASSED" : "FAILED"}
+                              </span>
+                            </div>
+
+                            <div>
+                              <span className="text-zinc-500 text-[10px] block">
+                                Input
+                              </span>
+                              <pre className="whitespace-pre-wrap wrap-break-word text-zinc-200 font-mono">
+                                {formatError(res.input)}
+                              </pre>
+                            </div>
+
+                            <div>
+                              <span className="text-zinc-500 text-[10px] block">
+                                Expected
+                              </span>
+                              <pre className="whitespace-pre-wrap wrap-break-word text-emerald-400 font-mono">
+                                {formatError(res.expected)}
+                              </pre>
+                            </div>
+
+                            <div>
+                              <span className="text-zinc-500 text-[10px] block">
+                                Actual Output
+                              </span>
+                              <pre
+                                className={`whitespace-pre-wrap wrap-break-word font-mono ${
+                                  res.passed
+                                    ? "text-emerald-400"
+                                    : "text-rose-400"
+                                }`}
+                              >
+                                {formatError(res.actual)}
+                              </pre>
+                            </div>
+
+                            {Boolean(res.error) && (
+                              <div>
+                                <span className="text-zinc-500 text-[10px] block">
+                                  Error
+                                </span>
+                                <pre className="whitespace-pre-wrap wrap-break-word text-amber-300 font-mono">
+                                  {formatError(res.error)}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {Boolean(testOutput.error) && (
+                      <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
                         <pre className="whitespace-pre-wrap text-amber-300 font-mono text-[11px] leading-relaxed max-h-56 overflow-y-auto">
-                          {testOutput.error}
+                          {formatError(testOutput.error)}
                         </pre>
                         <p className="text-zinc-500 text-[10px] pt-1 border-t border-amber-500/20">
-                          Fix the error above and click &quot;Run Sample Tests&quot; to retry.
+                          Fix the error above and click &quot;Run Sample
+                          Tests&quot; to retry.
                         </p>
                       </div>
                     )}
@@ -648,35 +895,49 @@ export default function TakeOAPage({
                     {/* Per-case results */}
                     {testOutput.results && testOutput.results.length > 0 && (
                       <div className="space-y-2">
-                        {testOutput.results.map((res: any, idx: number) => (
+                        {testOutput.results.map((res, idx: number) => (
                           <div
                             key={res.id || idx}
                             className="rounded-lg border border-[#383838] bg-[#1e1e1e] p-3 text-xs space-y-1.5"
                           >
                             <div className="flex items-center justify-between">
-                              <span className="text-zinc-400 font-bold">Case {res.id || idx + 1}</span>
+                              <span className="text-zinc-400 font-bold">
+                                Case {res.id || idx + 1}
+                              </span>
                               <span
                                 className={`text-[10px] px-2 py-0.5 rounded font-bold ${
                                   res.passed
-                                    ? 'bg-emerald-500/20 text-emerald-400'
-                                    : 'bg-rose-500/20 text-rose-400'
+                                    ? "bg-emerald-500/20 text-emerald-400"
+                                    : "bg-rose-500/20 text-rose-400"
                                 }`}
                               >
-                                {res.passed ? 'PASSED' : 'FAILED'}
+                                {res.passed ? "PASSED" : "FAILED"}
                               </span>
                             </div>
                             <div>
-                              <span className="text-zinc-500 text-[10px] block">Input</span>
-                              <span className="text-zinc-200 font-mono">{res.input}</span>
+                              <span className="text-zinc-500 text-[10px] block">
+                                Input
+                              </span>
+                              <span className="text-zinc-200 font-mono">
+                                {formatError(res.input)}
+                              </span>
                             </div>
                             <div>
-                              <span className="text-zinc-500 text-[10px] block">Expected</span>
-                              <span className="text-emerald-400 font-mono">{res.expected}</span>
+                              <span className="text-zinc-500 text-[10px] block">
+                                Expected
+                              </span>
+                              <span className="text-emerald-400 font-mono">
+                                {formatError(res.expected)}
+                              </span>
                             </div>
                             <div>
-                              <span className="text-zinc-500 text-[10px] block">Actual Output</span>
-                              <span className={`font-mono ${res.passed ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                {res.actual}
+                              <span className="text-zinc-500 text-[10px] block">
+                                Actual Output
+                              </span>
+                              <span
+                                className={`font-mono ${res.passed ? "text-emerald-400" : "text-rose-400"}`}
+                              >
+                                {formatError(res.actual)}
                               </span>
                             </div>
                           </div>
@@ -685,17 +946,21 @@ export default function TakeOAPage({
                     )}
 
                     {/* Hidden test stats (only shown after Submit, not Run) */}
-                    {testOutput.hiddenStats && testOutput.hiddenStats.total > 0 && (
-                      <div className="rounded-lg border border-[#383838] bg-[#1e1e1e] p-3 text-xs flex items-center justify-between">
-                        <span className="text-zinc-400 flex items-center gap-1.5">
-                          <Lock className="h-3.5 w-3.5 text-zinc-500" />
-                          Hidden Test Cases
-                        </span>
-                        <span className={`font-mono font-bold ${testOutput.hiddenStats.allPassed ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {testOutput.hiddenStats.passed} / {testOutput.hiddenStats.total} passed
-                        </span>
-                      </div>
-                    )}
+                    {testOutput.hiddenStats &&
+                      testOutput.hiddenStats.total > 0 && (
+                        <div className="rounded-lg border border-[#383838] bg-[#1e1e1e] p-3 text-xs flex items-center justify-between">
+                          <span className="text-zinc-400 flex items-center gap-1.5">
+                            <Lock className="h-3.5 w-3.5 text-zinc-500" />
+                            Hidden Test Cases
+                          </span>
+                          <span
+                            className={`font-mono font-bold ${testOutput.hiddenStats.allPassed ? "text-emerald-400" : "text-rose-400"}`}
+                          >
+                            {testOutput.hiddenStats.passed} /{" "}
+                            {testOutput.hiddenStats.total} passed
+                          </span>
+                        </div>
+                      )}
                   </div>
                 )}
               </div>
@@ -720,7 +985,9 @@ export default function TakeOAPage({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => switchQuestion(Math.max(0, activeQuestionIndex - 1))}
+                onClick={() =>
+                  switchQuestion(Math.max(0, activeQuestionIndex - 1))
+                }
                 disabled={activeQuestionIndex === 0}
                 className="flex items-center gap-1 rounded-lg border border-[#383838] bg-[#282828] px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-[#383838] disabled:opacity-40"
               >
@@ -730,7 +997,14 @@ export default function TakeOAPage({
 
               <button
                 type="button"
-                onClick={() => switchQuestion(Math.min(session.questions.length - 1, activeQuestionIndex + 1))}
+                onClick={() =>
+                  switchQuestion(
+                    Math.min(
+                      session.questions.length - 1,
+                      activeQuestionIndex + 1,
+                    ),
+                  )
+                }
                 disabled={activeQuestionIndex === session.questions.length - 1}
                 className="flex items-center gap-1 rounded-lg border border-[#383838] bg-[#282828] px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-[#383838] disabled:opacity-40"
               >
@@ -792,7 +1066,8 @@ export default function TakeOAPage({
 
             <div className="space-y-3 text-sm text-zinc-300">
               <p>
-                Are you sure you want to finish and submit your entire assessment?
+                Are you sure you want to finish and submit your entire
+                assessment?
               </p>
               <div className="rounded-xl bg-[#1e1e1e] border border-[#383838] p-4 space-y-2 text-xs font-mono">
                 <div className="flex justify-between">
@@ -811,7 +1086,8 @@ export default function TakeOAPage({
               {answeredCount < totalQuestions && (
                 <p className="text-rose-400 text-xs flex items-center gap-1.5 font-semibold">
                   <AlertCircle className="h-4 w-4" />
-                  Warning: You have {totalQuestions - answeredCount} unsubmitted question(s).
+                  Warning: You have {totalQuestions - answeredCount} unsubmitted
+                  question(s).
                 </p>
               )}
             </div>
@@ -837,27 +1113,49 @@ export default function TakeOAPage({
       )}
 
       {/* Fullscreen Required Overlay Modal */}
-      {!isFullscreen && !isFinishedRef.current && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1a1a1a]/95 backdrop-blur-md p-4">
+      {!isFullscreen && !isFinished && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="fs-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#1a1a1a]/95 backdrop-blur-md p-4"
+        >
           <div className="w-full max-w-md rounded-2xl border border-[#383838] bg-[#282828] p-6 space-y-6 text-center shadow-2xl">
             <div className="flex flex-col items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#ffa116]/10 border border-[#ffa116]/30">
                 <Maximize className="h-6 w-6 text-[#ffa116]" />
               </div>
-              <h2 className="text-xl font-bold text-white">Fullscreen Mode Required</h2>
+              <h2 id="fs-title" className="text-xl font-bold text-white">
+                Fullscreen Mode Required
+              </h2>
               <p className="text-xs text-zinc-400 leading-relaxed">
-                This online assessment runs in mandatory Fullscreen Mode. Exiting fullscreen or pressing <kbd className="px-1.5 py-0.5 rounded bg-[#1e1e1e] border border-[#383838] text-[#ffa116] font-mono">ESC</kbd> will automatically finalize and submit your assessment.
+                This online assessment runs in mandatory Fullscreen Mode.
+                Exiting fullscreen or pressing{" "}
+                <kbd className="px-1.5 py-0.5 rounded bg-[#1e1e1e] border border-[#383838] text-[#ffa116] font-mono">
+                  ESC
+                </kbd>{" "}
+                will automatically finalize and submit your assessment.
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={enterFullscreen}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#ffa116] px-4 py-3 text-xs font-bold text-[#1a1a1a] hover:bg-[#ffa116]/90 transition shadow-md"
-            >
-              <Maximize className="h-4 w-4" />
-              Click to Enter Fullscreen Assessment
-            </button>
+            {!fsSupported ? (
+              <p className="text-xs text-rose-400">
+                Your browser doesn&apos;t support fullscreen. Please use a
+                desktop browser such as Chrome, Edge, or Firefox.
+              </p>
+            ) : (
+              <button
+                type="button"
+                autoFocus
+                onClick={enterFullscreen}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#ffa116] px-4 py-3 text-xs font-bold text-[#1a1a1a] hover:bg-[#ffa116]/90 transition shadow-md"
+              >
+                <Maximize className="h-4 w-4" />
+                Click to Enter Fullscreen Assessment
+              </button>
+            )}
+
+            {fsError && <p className="text-xs text-rose-400">{fsError}</p>}
           </div>
         </div>
       )}

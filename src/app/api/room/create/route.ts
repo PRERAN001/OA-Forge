@@ -57,34 +57,52 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    try {
-      const room = await RoomModel.create({
-        roomId: generateRoomId(),
-        inviteCode: generateCode(),
-        creatorEmail: session.user.email,
-        title: safeTitle,
-        members: [
-          {
-            email: session.user.email,
-            name: session.user.name || session.user.email,
-            joinedAt: new Date(),
-          },
-        ],
-        status: 'waiting',
-      });
+  let room;
+  try {
+    room = await RoomModel.create({
+      roomId: generateRoomId(),
+      creatorEmail: session.user.email,
+      title: safeTitle,
+      members: [
+        {
+          email: session.user.email,
+          name: session.user.name || session.user.email,
+          joinedAt: new Date(),
+        },
+      ],
+      status: 'waiting',
+    });
+  } catch (error) {
+    console.error('Room creation failed:', error);
+    return NextResponse.json({ error: 'Failed to create room' }, { status: 500 });
+  }
 
-      return NextResponse.json({
-        roomId: room.roomId,
-        inviteCode: room.inviteCode,
-        title: room.title,
-      });
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const inviteCode = generateCode();
+    try {
+      const result = await RoomModel.updateOne(
+        { _id: room._id, inviteCode: { $exists: false } },
+        { $set: { inviteCode } }
+      );
+
+      if (result.modifiedCount === 1) {
+        return NextResponse.json({
+          roomId: room.roomId,
+          inviteCode,
+          title: room.title,
+        });
+      }
     } catch (error) {
-      // Duplicate inviteCode/roomId: loop and try again with fresh values
       if (isDuplicateKeyError(error)) continue;
-      console.error('Room creation failed:', error);
-      return NextResponse.json({ error: 'Failed to create room' }, { status: 500 });
+      console.error('Invite code assignment failed:', error);
+      break;
     }
+  }
+
+  try {
+    await RoomModel.deleteOne({ _id: room._id });
+  } catch (cleanupError) {
+    console.error('Failed to clean up room after invite code assignment failure:', cleanupError);
   }
 
   return NextResponse.json(
