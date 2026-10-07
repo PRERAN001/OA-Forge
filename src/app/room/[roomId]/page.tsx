@@ -1,7 +1,7 @@
 'use client';
 
 import { use, useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation;
 import { useSession } from 'next-auth/react';
 import {
   Users,
@@ -24,6 +24,7 @@ import {
   X,
   Mail,
   UserPlus,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   OAFilterConfig,
@@ -32,7 +33,7 @@ import {
   Question,
 } from '@/types/oa';
 import DifficultyBadge from '@/components/DifficultyBadge';
-import { useOACredit, checkOACredit } from '@/lib/userCredits';
+import { useOACredit, checkOACredit, fetchUserCreditsFromDB } from '@/lib/userCredits';
 
 const ORANGE = '#ff9f0a';
 const POLL_INTERVAL_MS = 3000;
@@ -73,6 +74,7 @@ export default function RoomPage({
   const [isAddingPeople, setIsAddingPeople] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState('');
+  const [credits, setCredits] = useState({ loading: true, success: false, message: '', remainingCredits: 0 });
 
   // OA Configuration state (creator only)
   const [showConfig, setShowConfig] = useState(false);
@@ -119,11 +121,33 @@ export default function RoomPage({
     }
   }, [roomId, myEmail, router]);
 
+  // Fetch user credits
+  const fetchUserCredits = useCallback(async () => {
+    setCredits(prev => ({ ...prev, loading: true }));
+    try {
+      const state = await fetchUserCreditsFromDB(myEmail);
+      setCredits({
+        loading: false,
+        success: true,
+        message: state.isUnlimited ? '3 Months Unlimited Pass Active' : `Credit available`,
+        remainingCredits: state.isUnlimited ? 999 : state.credits
+      });
+    } catch (error) {
+      setCredits({
+        loading: false,
+        success: false,
+        message: 'Failed to fetch credits',
+        remainingCredits: 0
+      });
+    }
+  }, [myEmail, fetchUserCreditsFromDB]);
+
   useEffect(() => {
     fetchRoom();
+    fetchUserCredits();
     const interval = setInterval(fetchRoom, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [fetchRoom]);
+  }, [fetchRoom, fetchUserCredits]);
 
   // Load stats for config panel
   useEffect(() => {
@@ -307,6 +331,11 @@ export default function RoomPage({
                 Reconnecting...
               </span>
             )}
+
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-3 w-3 text-white/50" />
+              <span className="text-white/50">{credits.loading ? 'Loading...' : credits.message}</span>
+            </div>
 
             {!isCreator && (
               <button

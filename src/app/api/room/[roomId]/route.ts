@@ -122,8 +122,8 @@ export async function POST(
       return NextResponse.json({ error: 'OA already started.' }, { status: 400 });
     }
 
-    // Check if the creator has sufficient credits to start the OA
-    const { success: hasCredits, message, remainingCredits } = useOACredit();
+    // Check if the creator has sufficient credits to start the OA (without deducting)
+    const { success: hasCredits, message } = checkOACredit();
     if (!hasCredits) {
       return NextResponse.json({ error: message }, { status: 402 }); // 402 Payment Required
     }
@@ -199,6 +199,9 @@ export async function POST(
     room.startedAt = new Date();
     room.oaConfig = config;
     await room.save();
+
+    // Deduct 1 credit from the creator's account for starting the OA
+    useOACredit();
 
     return NextResponse.json({
       ok: true,
