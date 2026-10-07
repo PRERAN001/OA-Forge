@@ -11,7 +11,7 @@ declare global {
   var mongooseCache: MongooseCache | undefined;
 }
 
-let cached: MongooseCache = global.mongooseCache || { conn: null, promise: null };
+const cached: MongooseCache = global.mongooseCache || { conn: null, promise: null };
 
 if (!global.mongooseCache) {
   global.mongooseCache = cached;
@@ -28,22 +28,18 @@ export async function connectToDatabase(): Promise<typeof mongoose | null> {
       serverSelectionTimeoutMS: 5000,
     };
 
-    cached.promise = mongoose
-      .connect(MONGODB_URI, opts)
-      .then((m) => {
-        console.log('MongoDB Connected Successfully');
-        return m;
-      })
-      .catch((err) => {
-        console.warn('MongoDB Connection Warning:', err.message);
-        return null;
-      });
+    cached.promise = mongoose.connect(MONGODB_URI, opts).then((m) => {
+      console.log('MongoDB Connected Successfully');
+      return m;
+    });
   }
 
   try {
     cached.conn = await cached.promise;
-  } catch (e) {
+  } catch (error) {
     cached.promise = null;
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('MongoDB Connection Warning:', message);
     return null;
   }
 

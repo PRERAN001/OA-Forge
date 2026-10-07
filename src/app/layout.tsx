@@ -19,7 +19,9 @@ export const metadata: Metadata = {
   title: 'CodeSprint - Online Technical Assessment Platform',
   description:
     'Customize algorithm questions, difficulty levels, topic tags, points, and randomized mock assessments powered by authentic dataset (2,800+ questions).',
-  google:'WQXN1jxCnQ8sBy3H7NQ2lsuv2E0nwZw8ze8WNQe-0E',
+  verification: {
+    google: 'WQXN1jxCnQ8sBy3H7NQ2lsuv2E0nwZw8ze8WNQe-0E',
+  },
 };
 
 export default function RootLayout({

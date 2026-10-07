@@ -48,8 +48,14 @@ export async function fetchUserCreditsFromDB(email?: string): Promise<UserCredit
   try {
     const url = email ? `/api/user/credits?email=${encodeURIComponent(email)}` : '/api/user/credits';
     const res = await fetch(url);
-    if (res.ok) {
-      const dbData = await res.json();
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
+      const dbData = (await res.json()) as {
+        credits?: number;
+        isUnlimited?: boolean;
+        unlimitedExpiry?: string;
+        contributedCount?: number;
+      };
       if (dbData.credits !== undefined) {
         inMemoryCreditsState.credits = dbData.credits;
         inMemoryCreditsState.isUnlimited = !!dbData.isUnlimited;
@@ -69,6 +75,8 @@ export async function fetchUserCreditsFromDB(email?: string): Promise<UserCredit
           window.dispatchEvent(new Event('aura_credits_updated'));
         }
       }
+    } else if (!contentType.includes('application/json')) {
+      console.warn(`Credits API returned a non-JSON response (${res.status}).`);
     }
   } catch (e) {
     console.error('Failed to fetch user credits from DB:', e);
@@ -145,6 +153,31 @@ export function useOACredit(): { success: boolean; message: string; remainingCre
   saveUserCredits(state);
 
   return { success: true, message: '1 Credit Used', remainingCredits: state.credits };
+}
+
+export function checkOACredit(): { success: boolean; message: string; remainingCredits: number } {
+  const state = getUserCredits();
+
+  // Check 3-month pass expiry
+  if (state.isUnlimited) {
+    if (state.unlimitedExpiry && new Date(state.unlimitedExpiry).getTime() < Date.now()) {
+      state.isUnlimited = false;
+      state.unlimitedExpiry = undefined;
+      saveUserCredits(state);
+    } else {
+      return { success: true, message: '3 Months Unlimited Pass Active', remainingCredits: 999 };
+    }
+  }
+
+  if (state.credits <= 0) {
+    return {
+      success: false,
+      message: 'You have 0 OA credits remaining. Purchase ₹99 Unlimited Pass or contribute 3 questions to unlock!',
+      remainingCredits: 0,
+    };
+  }
+
+  return { success: true, message: 'Credit available', remainingCredits: state.credits };
 }
 
 export function addOACredits(

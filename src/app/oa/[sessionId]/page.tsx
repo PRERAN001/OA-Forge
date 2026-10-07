@@ -601,10 +601,13 @@ export default function TakeOAPage({
                   </div>
                 ) : (
                   <div className="space-y-3">
+                    {/* Status Banner */}
                     <div
                       className={`rounded-lg border p-3 text-xs font-bold flex items-center gap-2 ${
                         testOutput.status === 'PASSED'
                           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          : testOutput.status === 'ERROR'
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
                           : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
                       }`}
                     >
@@ -613,49 +616,86 @@ export default function TakeOAPage({
                           <CheckCircle2 className="h-4 w-4" />
                           All Sample Test Cases Passed!
                         </>
+                      ) : testOutput.status === 'ERROR' ? (
+                        <>
+                          <AlertCircle className="h-4 w-4" />
+                          Compilation / Runtime Error
+                        </>
                       ) : (
                         <>
                           <AlertCircle className="h-4 w-4" />
-                          Test Execution Mismatch
+                          Test Execution Mismatch — {testOutput.results?.filter((r: any) => r.passed).length ?? 0}/{testOutput.results?.length ?? 0} passed
                         </>
                       )}
                     </div>
 
-                    <div className="space-y-2">
-                      {testOutput.results?.map((res: any, idx: number) => (
-                        <div
-                          key={res.id || idx}
-                          className="rounded-lg border border-[#383838] bg-[#1e1e1e] p-3 text-xs space-y-1.5"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-zinc-400 font-bold">Case {res.id || idx + 1}</span>
-                            <span
-                              className={`text-[10px] px-2 py-0.5 rounded font-bold ${
-                                res.passed
-                                  ? 'bg-emerald-500/20 text-emerald-400'
-                                  : 'bg-rose-500/20 text-rose-400'
-                              }`}
-                            >
-                              {res.passed ? 'PASSED' : 'FAILED'}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-zinc-500 text-[10px] block">Input</span>
-                            <span className="text-zinc-200">{res.input}</span>
-                          </div>
-                          <div>
-                            <span className="text-zinc-500 text-[10px] block">Expected</span>
-                            <span className="text-emerald-400">{res.expected}</span>
-                          </div>
-                          <div>
-                            <span className="text-zinc-500 text-[10px] block">Actual Output</span>
-                            <span className={res.passed ? 'text-emerald-400' : 'text-rose-400'}>
-                              {res.actual}
-                            </span>
-                          </div>
+                    {/* Error Output Block (compile errors, stderr, runtime crashes) */}
+                    {testOutput.status === 'ERROR' && testOutput.error && (
+                      <div className="rounded-lg border border-amber-500/30 bg-[#1a1206] p-3 text-xs space-y-1.5">
+                        <div className="flex items-center gap-1.5 text-amber-400 font-bold text-[10px] uppercase tracking-wider">
+                          <Terminal className="h-3.5 w-3.5" />
+                          Error Output
                         </div>
-                      ))}
-                    </div>
+                        <pre className="whitespace-pre-wrap text-amber-300 font-mono text-[11px] leading-relaxed max-h-56 overflow-y-auto">
+                          {testOutput.error}
+                        </pre>
+                        <p className="text-zinc-500 text-[10px] pt-1 border-t border-amber-500/20">
+                          Fix the error above and click &quot;Run Sample Tests&quot; to retry.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Per-case results */}
+                    {testOutput.results && testOutput.results.length > 0 && (
+                      <div className="space-y-2">
+                        {testOutput.results.map((res: any, idx: number) => (
+                          <div
+                            key={res.id || idx}
+                            className="rounded-lg border border-[#383838] bg-[#1e1e1e] p-3 text-xs space-y-1.5"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-zinc-400 font-bold">Case {res.id || idx + 1}</span>
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                                  res.passed
+                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                    : 'bg-rose-500/20 text-rose-400'
+                                }`}
+                              >
+                                {res.passed ? 'PASSED' : 'FAILED'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-zinc-500 text-[10px] block">Input</span>
+                              <span className="text-zinc-200 font-mono">{res.input}</span>
+                            </div>
+                            <div>
+                              <span className="text-zinc-500 text-[10px] block">Expected</span>
+                              <span className="text-emerald-400 font-mono">{res.expected}</span>
+                            </div>
+                            <div>
+                              <span className="text-zinc-500 text-[10px] block">Actual Output</span>
+                              <span className={`font-mono ${res.passed ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {res.actual}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Hidden test stats (only shown after Submit, not Run) */}
+                    {testOutput.hiddenStats && testOutput.hiddenStats.total > 0 && (
+                      <div className="rounded-lg border border-[#383838] bg-[#1e1e1e] p-3 text-xs flex items-center justify-between">
+                        <span className="text-zinc-400 flex items-center gap-1.5">
+                          <Lock className="h-3.5 w-3.5 text-zinc-500" />
+                          Hidden Test Cases
+                        </span>
+                        <span className={`font-mono font-bold ${testOutput.hiddenStats.allPassed ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {testOutput.hiddenStats.passed} / {testOutput.hiddenStats.total} passed
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
