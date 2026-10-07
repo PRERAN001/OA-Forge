@@ -203,6 +203,9 @@ export default function RoomPage({
   };
 
   const handleStartOA = async () => {
+    // Ensure we have the latest credits from DB
+    await fetchUserCredits();
+
     // Credit check (without deducting)
     const creditResult = checkOACredit();
     if (!creditResult.success) {

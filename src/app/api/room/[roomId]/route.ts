@@ -122,6 +122,8 @@ export async function POST(
       return NextResponse.json({ error: 'OA already started.' }, { status: 400 });
     }
 
+    // Fetch latest credits from DB to ensure we have the current state
+    await fetchUserCreditsFromDB(session.user.email);
     // Check if the creator has sufficient credits to start the OA (without deducting)
     const { success: hasCredits, message } = checkOACredit();
     if (!hasCredits) {
