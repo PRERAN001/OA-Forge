@@ -2,13 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionServer, saveSessionServer } from '@/lib/sessionStore';
 import { OASession, Submission } from '@/types/oa';
 import { executeOnJudge0 } from '@/lib/judge0';
+import { getOASessionFromDB } from '@/lib/dbServices';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   const { sessionId } = await params;
-  const session = getSessionServer(sessionId);
+  let session = getSessionServer(sessionId);
+
+  // If not found in memory, try to fetch from database
+  if (!session) {
+    session = await getOASessionFromDB(sessionId);
+    if (session) {
+      // Cache it in memory for future requests
+      saveSessionServer(session);
+    }
+  }
 
   if (!session) {
     return NextResponse.json({ error: 'Session not found' }, { status: 404 });
@@ -26,6 +36,15 @@ export async function POST(
   const { action, questionId, submission, finishAssessment } = body;
 
   let session = getSessionServer(sessionId);
+
+  // If not found in memory, try to fetch from database
+  if (!session) {
+    session = await getOASessionFromDB(sessionId);
+    if (session) {
+      // Cache it in memory for future requests
+      saveSessionServer(session);
+    }
+  }
 
   if (!session) {
     if (body.sessionData) {
