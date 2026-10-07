@@ -7,7 +7,7 @@ import { getRandomizedQuestionsFromDB, filterQuestionsFromDB } from '@/lib/quest
 import { OASession, OAFilterConfig, Question } from '@/types/oa';
 import { saveSessionServer } from '@/lib/sessionStore';
 import { saveOASessionToDB } from '@/lib/dbServices';
-import { useOACredit, checkOACredit } from '@/lib/userCredits';
+import { useOACredit, checkOACredit, fetchUserCreditsFromDB } from '@/lib/userCredits';
 
 // GET /api/room/[roomId] — poll room state
 export async function GET(
