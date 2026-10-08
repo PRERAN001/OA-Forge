@@ -23,6 +23,9 @@ import {
   RefreshCw,
   Lock,
   Maximize,
+  Clock,
+  Copy,
+  XCircle,
 } from "lucide-react";
 
 type OutputState = "passed" | "failed" | "error";
@@ -101,6 +104,7 @@ export default function TakeOAPage({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRunningTests, setIsRunningTests] = useState(false);
   const [testOutput, setTestOutput] = useState<TestOutput | null>(null);
+  const [selectedCaseTab, setSelectedCaseTab] = useState<number>(0);
 
   // Finish Confirmation Modal & Fullscreen State
   const [showFinishModal, setShowFinishModal] = useState(false);
@@ -437,6 +441,7 @@ export default function TakeOAPage({
       }
 
       setTestOutput(data);
+      setSelectedCaseTab(0);
     } catch (e) {
       setTestOutput({
         status: "ERROR",
@@ -446,6 +451,7 @@ export default function TakeOAPage({
             : "Network error: could not reach the code runner.",
         results: [],
       });
+      setSelectedCaseTab(0);
     } finally {
       setIsRunningTests(false);
     }
@@ -479,6 +485,7 @@ export default function TakeOAPage({
           error: data.details || data.error || `Submit failed (${res.status})`,
           results: [],
         });
+        setSelectedCaseTab(0);
         setLeftTab("console");
         return;
       }
@@ -490,6 +497,7 @@ export default function TakeOAPage({
 
       if (data.execution) {
         setTestOutput(data.execution);
+        setSelectedCaseTab(0);
         setLeftTab("console");
       }
     } catch (e) {
@@ -751,197 +759,204 @@ export default function TakeOAPage({
                     Solution&quot; to see test execution results here.
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {/* Status banner */}
                     <div
-                      className={`rounded-lg border p-3 text-xs font-bold flex items-center gap-2 ${
-                        outputState === "passed"
-                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                          : outputState === "error"
+                      className={`rounded-lg border p-3 text-xs font-bold flex items-center justify-between ${
+                        testOutput.status === "COMPILE_ERROR" || testOutput.status === "RUNTIME_ERROR" || outputState === "failed"
+                          ? "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                          : testOutput.status === "TIME_LIMIT_EXCEEDED"
                             ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                            : "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                            : outputState === "passed"
+                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                              : "bg-rose-500/10 text-rose-400 border-rose-500/30"
                       }`}
                     >
-                      {outputState === "passed" ? (
-                        <>
-                          <CheckCircle2 className="h-4 w-4" />
-                          All Test Cases Passed!
-                        </>
-                      ) : outputState === "error" ? (
-                        <>
-                          <AlertCircle className="h-4 w-4" />
-                          {testOutput.status && testOutput.status !== "ERROR"
-                            ? testOutput.status
-                            : "Execution Error"}
-                        </>
-                      ) : testOutput.status === "ERROR" ? (
-                        <>
-                          <AlertCircle className="h-4 w-4" />
-                          Compilation / Runtime Error
-                        </>
-                      ) : (
-                        <>
-                          <AlertCircle className="h-4 w-4" />
-                          Wrong Answer
-                        </>
-                      )}
-                    </div>
-
-                    {/* Top-level error: compile error, Judge0 failure, timeout, etc. */}
-                    {Boolean(testOutput.error) && (
-                      <pre className="whitespace-pre-wrap wrap-break-word rounded-lg border border-amber-500/30 bg-[#1e1e1e] p-3 text-[11px] leading-relaxed text-amber-300 overflow-x-auto">
-                        {formatError(testOutput.error)}
-                      </pre>
-                    )}
-
-                    {/* Summary across all tests */}
-                    {(testOutput.totalTests ?? 0) > 0 && (
-                      <div className="text-xs text-zinc-400">
-                        Passed {testOutput.totalPassed ?? 0} /{" "}
-                        {testOutput.totalTests ?? 0} total tests
-                        {(testOutput.hiddenStats?.total ?? 0) > 0 && (
+                      <div className="flex items-center gap-2">
+                        {testOutput.status === "COMPILE_ERROR" ? (
                           <>
-                            {" "}
-                            · Hidden: {testOutput.hiddenStats?.passed ?? 0} /{" "}
-                            {testOutput.hiddenStats?.total ?? 0}
+                            <XCircle className="h-4 w-4 text-rose-400" />
+                            Compile Error
+                          </>
+                        ) : testOutput.status === "RUNTIME_ERROR" ? (
+                          <>
+                            <AlertCircle className="h-4 w-4 text-rose-400" />
+                            Runtime Error
+                          </>
+                        ) : testOutput.status === "TIME_LIMIT_EXCEEDED" ? (
+                          <>
+                            <Clock className="h-4 w-4 text-amber-400" />
+                            Time Limit Exceeded
+                          </>
+                        ) : outputState === "passed" ? (
+                          <>
+                            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                            Accepted
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="h-4 w-4 text-rose-400" />
+                            Wrong Answer
                           </>
                         )}
                       </div>
-                    )}
 
-                    {/* Per-case results */}
-                    {testOutput.results && testOutput.results.length > 0 && (
-                      <div className="space-y-2">
-                        {testOutput.results.map((res, idx: number) => (
-                          <div
-                            key={res.id ?? idx}
-                            className="rounded-lg border border-[#383838] bg-[#1e1e1e] p-3 text-xs space-y-1.5"
+                      {/* Summary indicator */}
+                      {(testOutput.totalTests ?? 0) > 0 && testOutput.status !== "COMPILE_ERROR" && (
+                        <div className="text-[11px] font-mono font-normal opacity-90">
+                          {testOutput.totalPassed ?? 0} / {testOutput.totalTests ?? 0} test cases passed
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 1. Compile Error Output (LeetCode Compiler View) */}
+                    {testOutput.status === "COMPILE_ERROR" ? (
+                      <div className="rounded-xl border border-rose-500/30 bg-[#161616] overflow-hidden shadow-lg">
+                        <div className="flex items-center justify-between px-3.5 py-2 bg-rose-500/10 border-b border-rose-500/20 text-xs">
+                          <span className="font-mono font-semibold text-rose-400 flex items-center gap-1.5">
+                            <Terminal className="h-3.5 w-3.5" />
+                            Compiler Message
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (testOutput.error) {
+                                navigator.clipboard.writeText(formatError(testOutput.error));
+                              }
+                            }}
+                            className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-white px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 transition"
                           >
-                            <div className="flex items-center justify-between">
-                              <span className="text-zinc-400 font-bold">
-                                Case {res.id ?? idx + 1}
-                              </span>
-                              <span
-                                className={`text-[10px] px-2 py-0.5 rounded font-bold ${
-                                  res.passed
-                                    ? "bg-emerald-500/20 text-emerald-400"
-                                    : "bg-rose-500/20 text-rose-400"
-                                }`}
-                              >
-                                {res.passed ? "PASSED" : "FAILED"}
-                              </span>
-                            </div>
-
-                            <div>
-                              <span className="text-zinc-500 text-[10px] block">
-                                Input
-                              </span>
-                              <pre className="whitespace-pre-wrap wrap-break-word text-zinc-200 font-mono">
-                                {formatError(res.input)}
-                              </pre>
-                            </div>
-
-                            <div>
-                              <span className="text-zinc-500 text-[10px] block">
-                                Expected
-                              </span>
-                              <pre className="whitespace-pre-wrap wrap-break-word text-emerald-400 font-mono">
-                                {formatError(res.expected)}
-                              </pre>
-                            </div>
-
-                            <div>
-                              <span className="text-zinc-500 text-[10px] block">
-                                Actual Output
-                              </span>
-                              <pre
-                                className={`whitespace-pre-wrap wrap-break-word font-mono ${
-                                  res.passed
-                                    ? "text-emerald-400"
-                                    : "text-rose-400"
-                                }`}
-                              >
-                                {formatError(res.actual)}
-                              </pre>
-                            </div>
-
-                            {Boolean(res.error) && (
-                              <div>
-                                <span className="text-zinc-500 text-[10px] block">
-                                  Error
-                                </span>
-                                <pre className="whitespace-pre-wrap wrap-break-word text-amber-300 font-mono">
-                                  {formatError(res.error)}
-                                </pre>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {Boolean(testOutput.error) && (
-                      <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
-                        <pre className="whitespace-pre-wrap text-amber-300 font-mono text-[11px] leading-relaxed max-h-56 overflow-y-auto">
+                            <Copy className="h-3 w-3" />
+                            Copy
+                          </button>
+                        </div>
+                        <pre className="p-4 font-mono text-[11.5px] leading-relaxed text-rose-300/90 whitespace-pre-wrap overflow-x-auto max-h-[420px] select-text">
                           {formatError(testOutput.error)}
                         </pre>
-                        <p className="text-zinc-500 text-[10px] pt-1 border-t border-amber-500/20">
-                          Fix the error above and click &quot;Run Sample
-                          Tests&quot; to retry.
+                      </div>
+                    ) : testOutput.status === "RUNTIME_ERROR" && (!testOutput.results || testOutput.results.length === 0) ? (
+                      /* 2. Top-level Runtime Error (Crashed before executing tests) */
+                      <div className="rounded-xl border border-rose-500/30 bg-[#161616] overflow-hidden shadow-lg">
+                        <div className="flex items-center justify-between px-3.5 py-2 bg-rose-500/10 border-b border-rose-500/20 text-xs font-mono font-semibold text-rose-400">
+                          <span className="flex items-center gap-1.5">
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            Runtime Exception
+                          </span>
+                        </div>
+                        <pre className="p-4 font-mono text-[11.5px] leading-relaxed text-rose-300 whitespace-pre-wrap overflow-x-auto max-h-[420px] select-text">
+                          {formatError(testOutput.error)}
+                        </pre>
+                      </div>
+                    ) : testOutput.status === "TIME_LIMIT_EXCEEDED" ? (
+                      /* 3. Time Limit Exceeded View */
+                      <div className="rounded-xl border border-amber-500/30 bg-[#161616] p-4 text-xs font-mono space-y-2">
+                        <div className="text-amber-400 font-semibold flex items-center gap-1.5">
+                          <Clock className="h-4 w-4" />
+                          Time Limit Exceeded
+                        </div>
+                        <p className="text-zinc-400 text-[11px] leading-relaxed">
+                          Your solution took longer than 5.0 seconds to finish. Check for infinite loops or inefficient algorithms.
                         </p>
+                      </div>
+                    ) : null}
+
+                    {/* Generic / Server Error fallback */}
+                    {testOutput.status === "ERROR" && Boolean(testOutput.error) && (
+                      <div className="rounded-xl border border-amber-500/30 bg-[#161616] p-4 text-xs font-mono space-y-2">
+                        <div className="text-amber-400 font-semibold flex items-center gap-1.5">
+                          <AlertCircle className="h-4 w-4" />
+                          Execution Warning
+                        </div>
+                        <pre className="text-amber-300/90 whitespace-pre-wrap text-[11px] leading-relaxed max-h-56 overflow-y-auto">
+                          {formatError(testOutput.error)}
+                        </pre>
                       </div>
                     )}
 
-                    {/* Per-case results */}
+                    {/* 4. Per-case results (LeetCode Tabbed View) */}
                     {testOutput.results && testOutput.results.length > 0 && (
-                      <div className="space-y-2">
-                        {testOutput.results.map((res, idx: number) => (
-                          <div
-                            key={res.id || idx}
-                            className="rounded-lg border border-[#383838] bg-[#1e1e1e] p-3 text-xs space-y-1.5"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-zinc-400 font-bold">
-                                Case {res.id || idx + 1}
-                              </span>
-                              <span
-                                className={`text-[10px] px-2 py-0.5 rounded font-bold ${
-                                  res.passed
-                                    ? "bg-emerald-500/20 text-emerald-400"
-                                    : "bg-rose-500/20 text-rose-400"
+                      <div className="space-y-3 font-mono">
+                        {/* Case Navigation Tabs */}
+                        <div className="flex items-center gap-1.5 border-b border-[#333] pb-2 overflow-x-auto">
+                          {testOutput.results.map((res, idx) => {
+                            const isSelected = (selectedCaseTab ?? 0) === idx;
+                            return (
+                              <button
+                                key={res.id ?? idx}
+                                type="button"
+                                onClick={() => setSelectedCaseTab(idx)}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono transition ${
+                                  isSelected
+                                    ? "bg-[#282828] text-white font-bold border border-[#444] shadow-sm"
+                                    : "text-zinc-400 hover:text-zinc-200 hover:bg-[#202020]"
                                 }`}
                               >
-                                {res.passed ? "PASSED" : "FAILED"}
-                              </span>
+                                <span
+                                  className={`h-2 w-2 rounded-full ${
+                                    res.passed ? "bg-emerald-400" : "bg-rose-400"
+                                  }`}
+                                />
+                                Case {res.id ?? idx + 1}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Selected Case Content */}
+                        {(() => {
+                          const currentRes =
+                            testOutput.results[selectedCaseTab] ||
+                            testOutput.results[0];
+                          if (!currentRes) return null;
+
+                          return (
+                            <div className="space-y-3 pt-1">
+                              <div>
+                                <span className="text-zinc-400 text-[10px] uppercase font-bold tracking-wider block mb-1">
+                                  Input
+                                </span>
+                                <div className="rounded-lg bg-[#202020] border border-[#333] p-3 text-zinc-200 text-xs whitespace-pre-wrap break-all">
+                                  {formatError(currentRes.input)}
+                                </div>
+                              </div>
+
+                              <div>
+                                <span className="text-zinc-400 text-[10px] uppercase font-bold tracking-wider block mb-1">
+                                  Output
+                                </span>
+                                <div
+                                  className={`rounded-lg bg-[#202020] border p-3 text-xs whitespace-pre-wrap break-all ${
+                                    currentRes.passed
+                                      ? "border-emerald-500/30 text-emerald-400"
+                                      : "border-rose-500/30 text-rose-400"
+                                  }`}
+                                >
+                                  {formatError(currentRes.actual)}
+                                </div>
+                              </div>
+
+                              <div>
+                                <span className="text-zinc-400 text-[10px] uppercase font-bold tracking-wider block mb-1">
+                                  Expected
+                                </span>
+                                <div className="rounded-lg bg-[#202020] border border-[#333] p-3 text-emerald-400 text-xs whitespace-pre-wrap break-all">
+                                  {formatError(currentRes.expected)}
+                                </div>
+                              </div>
+
+                              {Boolean(currentRes.error) && (
+                                <div>
+                                  <span className="text-rose-400 text-[10px] uppercase font-bold tracking-wider block mb-1">
+                                    Runtime Error
+                                  </span>
+                                  <div className="rounded-lg bg-rose-500/10 border border-rose-500/30 p-3 text-rose-300 text-xs whitespace-pre-wrap">
+                                    {formatError(currentRes.error)}
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                            <div>
-                              <span className="text-zinc-500 text-[10px] block">
-                                Input
-                              </span>
-                              <span className="text-zinc-200 font-mono">
-                                {formatError(res.input)}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-zinc-500 text-[10px] block">
-                                Expected
-                              </span>
-                              <span className="text-emerald-400 font-mono">
-                                {formatError(res.expected)}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-zinc-500 text-[10px] block">
-                                Actual Output
-                              </span>
-                              <span
-                                className={`font-mono ${res.passed ? "text-emerald-400" : "text-rose-400"}`}
-                              >
-                                {formatError(res.actual)}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })()}
                       </div>
                     )}
 
@@ -949,12 +964,16 @@ export default function TakeOAPage({
                     {testOutput.hiddenStats &&
                       testOutput.hiddenStats.total > 0 && (
                         <div className="rounded-lg border border-[#383838] bg-[#1e1e1e] p-3 text-xs flex items-center justify-between">
-                          <span className="text-zinc-400 flex items-center gap-1.5">
+                          <span className="text-zinc-400 flex items-center gap-1.5 font-mono">
                             <Lock className="h-3.5 w-3.5 text-zinc-500" />
                             Hidden Test Cases
                           </span>
                           <span
-                            className={`font-mono font-bold ${testOutput.hiddenStats.allPassed ? "text-emerald-400" : "text-rose-400"}`}
+                            className={`font-mono font-bold ${
+                              testOutput.hiddenStats.allPassed
+                                ? "text-emerald-400"
+                                : "text-rose-400"
+                            }`}
                           >
                             {testOutput.hiddenStats.passed} /{" "}
                             {testOutput.hiddenStats.total} passed
