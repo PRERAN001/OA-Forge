@@ -6,8 +6,7 @@ import RoomModel from '@/models/RoomModel';
 import { getRandomizedQuestionsFromDB, filterQuestionsFromDB } from '@/lib/questions';
 import { OASession, OAFilterConfig, Question } from '@/types/oa';
 import { saveSessionServer } from '@/lib/sessionStore';
-import { saveOASessionToDB } from '@/lib/dbServices';
-import { useOACredit, checkOACredit, fetchUserCreditsFromDB } from '@/lib/userCredits';
+import { saveOASessionToDB, getUserFromDB, updateUserCreditStatusInDB } from '@/lib/dbServices';
 
 // GET /api/room/[roomId] — poll room state
 export async function GET(
@@ -122,12 +121,12 @@ export async function POST(
       return NextResponse.json({ error: 'OA already started.' }, { status: 400 });
     }
 
-    // Fetch latest credits from DB to ensure we have the current state
-    await fetchUserCreditsFromDB(session.user.email);
-    // Check if the creator has sufficient credits to start the OA (without deducting)
-    const { success: hasCredits, message } = checkOACredit();
-    if (!hasCredits) {
-      return NextResponse.json({ error: message }, { status: 402 }); // 402 Payment Required
+    // Fetch latest credits from DB
+    const user = await getUserFromDB(session.user.email);
+
+    // Check if the creator has sufficient credits to start the OA
+    if (user && !user.isUnlimited && user.credits <= 0) {
+      return NextResponse.json({ error: 'You have 0 OA credits remaining. Purchase ₹99 Unlimited Pass or contribute 3 questions to unlock!' }, { status: 402 }); // 402 Payment Required
     }
 
     const config: OAFilterConfig = body.oaConfig || room.oaConfig;
@@ -203,7 +202,9 @@ export async function POST(
     await room.save();
 
     // Deduct 1 credit from the creator's account for starting the OA
-    useOACredit();
+    if (user && !user.isUnlimited) {
+      await updateUserCreditStatusInDB(session.user.email, { credits: user.credits - 1 });
+    }
 
     return NextResponse.json({
       ok: true,

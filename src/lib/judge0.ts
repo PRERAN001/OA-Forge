@@ -22,11 +22,110 @@ export interface TestResultItem {
 }
 
 export interface RunResult {
-  status: 'PASSED' | 'FAILED' | 'ERROR';
+  status: 'PASSED' | 'FAILED' | 'ERROR' | 'COMPILE_ERROR' | 'RUNTIME_ERROR' | 'TIME_LIMIT_EXCEEDED' | string;
   results: TestResultItem[];
   runtime: string;
   memory: string;
   error?: string;
+}
+
+export function decodeBase64(str: string | null | undefined): string {
+  if (!str) return '';
+  try {
+    return Buffer.from(str, 'base64').toString('utf-8');
+  } catch {
+    return str;
+  }
+}
+
+export function stripAnsi(text: string): string {
+  return text.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
+}
+
+export function cleanCompilerError(
+  rawError: string,
+  language: string,
+  _userCode: string = ''
+): string {
+  if (!rawError) return '';
+
+  // 1. Strip ANSI escape sequences (colors, cursor positioning)
+  let cleaned = stripAnsi(rawError).trim();
+
+  // 2. Strip container / box paths
+  cleaned = cleaned.replace(/\/(?:tmp|judge|box|isolate)[^:\s]*\//g, '');
+
+  const lang = (language || '').toLowerCase();
+
+  if (lang === 'cpp') {
+    const lines = cleaned.split('\n');
+    const outLines: string[] = [];
+    for (const l of lines) {
+      if (l.includes('Harness.cpp')) continue;
+      // Convert "Solution.cpp:5:10: error:" to "Line 5: Char 10: error:"
+      const formatted = l.replace(/(?:Solution\.cpp|prog\.cpp|main\.cpp):(\d+):(\d+):/g, 'Line $1: Char $2:');
+      outLines.push(formatted);
+    }
+    cleaned = outLines.join('\n').trim();
+  } else if (lang === 'python') {
+    const PYTHON_HEADER_LINES = 81;
+    const lines = cleaned.split('\n');
+    const outLines: string[] = [];
+    let skip = false;
+
+    for (const l of lines) {
+      if (
+        l.includes('run_tests') ||
+        l.includes('__kwargs') ||
+        l.includes('output_payload') ||
+        l.includes('__OAFORGE_RESULT__')
+      ) {
+        skip = true;
+        continue;
+      }
+      if (skip && l.trim().startsWith('File ') && !l.includes('solution.py') && !l.includes('<string>')) {
+        continue;
+      }
+      skip = false;
+
+      const m = l.match(/File ".*?", line (\d+)(.*)/);
+      if (m) {
+        const rawLine = parseInt(m[1], 10);
+        const adjLine = rawLine > PYTHON_HEADER_LINES ? rawLine - PYTHON_HEADER_LINES : rawLine;
+        outLines.push(`  Line ${adjLine}${m[2]}`);
+      } else {
+        outLines.push(l);
+      }
+    }
+    cleaned = outLines.join('\n').trim();
+  } else if (lang === 'java') {
+    const JAVA_HEADER_LINES = 28;
+    cleaned = cleaned.replace(/Main\.java:(\d+):/g, (_, lineStr) => {
+      const rawLine = parseInt(lineStr, 10);
+      const adjLine = rawLine > JAVA_HEADER_LINES ? rawLine - JAVA_HEADER_LINES : rawLine;
+      return `Line ${adjLine}:`;
+    });
+  } else if (lang === 'javascript' || lang === 'typescript') {
+    const JS_HEADER_LINES = 108;
+    cleaned = cleaned.replace(/:(\d+):(\d+)/g, (full, lineStr, charStr) => {
+      const rawLine = parseInt(lineStr, 10);
+      if (rawLine > JS_HEADER_LINES) {
+        return `:${rawLine - JS_HEADER_LINES}:${charStr}`;
+      }
+      return full;
+    });
+  } else if (lang === 'go') {
+    const lines = cleaned.split('\n');
+    const outLines: string[] = [];
+    for (const l of lines) {
+      if (l.includes('harness.go')) continue;
+      const formatted = l.replace(/(?:solution\.go|main\.go):(\d+):(\d+):/g, 'Line $1: Char $2:');
+      outLines.push(formatted);
+    }
+    cleaned = outLines.join('\n').trim();
+  }
+
+  return cleaned;
 }
 
 export function generatePythonHarness(
@@ -1070,7 +1169,9 @@ void printResult(TreeNode* root) {
     cout << "]";
 }
 
+#line 1 "Solution.cpp"
 ${userCode}
+#line 1 "Harness.cpp"
 
 int main() {
     ios_base::sync_with_stdio(false);
@@ -1267,7 +1368,9 @@ func runCase(caseId int, f func()) {
     f()
 }
 
+//line solution.go:1
 ${cleanUserCode}
+//line harness.go:1
 
 func main() {
     ${testCalls}
@@ -1349,16 +1452,21 @@ export async function executeOnJudge0(
     }
   }
 
-  const endpoint = `${JUDGE0_BASE_URL}/submissions?base64_encoded=false&wait=false`;
+  const endpoint = `${JUDGE0_BASE_URL}/submissions?base64_encoded=true&wait=false`;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  const authToken = process.env.JUDGE0_AUTH_TOKEN || 'e40515c62071ceaf660b59f74b12d5e1';
+  if (authToken) {
+    headers['X-Auth-Token'] = authToken;
+  }
 
   const response = await fetch(endpoint, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Auth-Token': 'e40515c62071ceaf660b59f74b12d5e1',
-    },
+    headers,
     body: JSON.stringify({
-      source_code: sourceCode,
+      source_code: Buffer.from(sourceCode).toString('base64'),
       language_id: languageId,
       cpu_time_limit: 5,
       memory_limit: 128000,
@@ -1382,12 +1490,15 @@ export async function executeOnJudge0(
   for (let i = 0; i < 40; i++) {
     await new Promise((r) => setTimeout(r, 1000));
     const res = await fetch(
-      `${JUDGE0_BASE_URL}/submissions/${token}?base64_encoded=false`,
-      { headers: { 'X-Auth-Token': 'e40515c62071ceaf660b59f74b12d5e1' } }
+      `${JUDGE0_BASE_URL}/submissions/${token}?base64_encoded=true`,
+      { headers }
     );
     if (!res.ok) {
       return {
-        status: 'ERROR', results: [], runtime: '0 ms', memory: '0 MB',
+        status: 'ERROR',
+        results: [],
+        runtime: '0 ms',
+        memory: '0 MB',
         error: `Judge0 poll error (${res.status}): ${await res.text()}`,
       };
     }
@@ -1397,26 +1508,60 @@ export async function executeOnJudge0(
   
   if (!result || result.status?.id < 3) {
     return {
-      status: 'ERROR', results: [], runtime: '0 ms', memory: '0 MB',
+      status: 'ERROR',
+      results: [],
+      runtime: '0 ms',
+      memory: '0 MB',
       error: 'Timed out waiting for Judge0 to finish.',
     };
   }
 
-  if (result.compile_output || (result.stderr && !result.stdout)) {
+  const stdout = decodeBase64(result.stdout);
+  const rawStderr = decodeBase64(result.stderr);
+  const rawCompileOutput = decodeBase64(result.compile_output);
+  const rawMessage = decodeBase64(result.message);
+
+  const compileOutput = cleanCompilerError(rawCompileOutput, normalizedLang, userCode);
+  const stderr = cleanCompilerError(rawStderr, normalizedLang, userCode);
+  const message = cleanCompilerError(rawMessage, normalizedLang, userCode);
+
+  const runtimeStr = result.time ? `${Math.round(parseFloat(result.time) * 1000)} ms` : '0 ms';
+  const memoryStr = result.memory ? `${(result.memory / 1024).toFixed(1)} MB` : '0 MB';
+
+  // 1. Compilation Error (Status ID 6 or compile_output present)
+  if (result.status?.id === 6 || compileOutput) {
     return {
-      status: 'ERROR',
+      status: 'COMPILE_ERROR',
       results: [],
-      runtime: result.time ? `${Math.round(parseFloat(result.time) * 1000)} ms` : '0 ms',
-      memory: result.memory ? `${(result.memory / 1024).toFixed(1)} MB` : '0 MB',
-      error: result.compile_output || result.stderr || result.status?.description,
+      runtime: runtimeStr,
+      memory: memoryStr,
+      error: compileOutput || stderr || 'Compilation Error: Check syntax and typing.',
     };
   }
 
-  const stdout = result.stdout || '';
-  const runtimeStr = result.time ? `${Math.round(parseFloat(result.time) * 1000)} ms` : '12 ms';
-  const memoryStr = result.memory ? `${(result.memory / 1024).toFixed(1)} MB` : '15 MB';
+  // 2. Time Limit Exceeded (Status ID 5)
+  if (result.status?.id === 5) {
+    return {
+      status: 'TIME_LIMIT_EXCEEDED',
+      results: [],
+      runtime: runtimeStr,
+      memory: memoryStr,
+      error: 'Time Limit Exceeded: Your solution exceeded the 5.0s CPU time limit.',
+    };
+  }
 
-  // 1. JSON report format (__OAFORGE_RESULT__)
+  // 3. Runtime Error (Status ID 7..12 or stderr without stdout)
+  if ((result.status?.id >= 7 && result.status?.id <= 12) || (stderr && !stdout)) {
+    return {
+      status: 'RUNTIME_ERROR',
+      results: [],
+      runtime: runtimeStr,
+      memory: memoryStr,
+      error: stderr || message || result.status?.description || 'Runtime Error: Program crashed during execution.',
+    };
+  }
+
+  // 4. JSON report format (__OAFORGE_RESULT__)
   const match = stdout.match(/__OAFORGE_RESULT__([\s\S]*?)__END__/);
   if (match) {
     try {
@@ -1440,7 +1585,7 @@ export async function executeOnJudge0(
     }
   }
 
-  // 2. Case marker format (__OAFORGE_CASE__)
+  // 5. Case marker format (__OAFORGE_CASE__)
   if (stdout.includes('__OAFORGE_CASE__')) {
     const results: TestResultItem[] = validTestCases.map((tc, idx) => {
       const caseId = idx + 1;
@@ -1493,10 +1638,11 @@ export async function executeOnJudge0(
   }
 
   return {
-    status: 'ERROR',
+    status: 'RUNTIME_ERROR',
     results: [],
     runtime: runtimeStr,
     memory: memoryStr,
-    error: result.stderr || result.message || 'Execution failed without output.',
+    error: stderr || result.stderr || result.message || 'Execution failed without test case output.',
   };
 }
+
