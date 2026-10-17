@@ -1,26 +1,60 @@
 "use client";
 
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 
 type Props = {
+  /** Unique id per announcement. Change it when you post a new one so it shows again. */
+  id: string;
   message: string;
   /** Optional link, e.g. "/changelog" */
   href?: string;
   linkText?: string;
-  /** Let users close the bar for the current page view. Default: true */
+  /** Let users close the bar (remembered in localStorage). Default: true */
   dismissible?: boolean;
 };
 
 export default function AnnouncementBar({
+  id,
   message,
   href,
   linkText = "Learn more",
   dismissible = true,
 }: Props) {
-  const [visible, setVisible] = useState(true);
+  const storageKey = `announcement-dismissed:${id}`;
+  const subscribe = (onStoreChange: () => void) => {
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === storageKey) {
+        onStoreChange();
+      }
+    };
+    const handleAnnouncementChange = () => onStoreChange();
+
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("announcement-dismissed", handleAnnouncementChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener(
+        "announcement-dismissed",
+        handleAnnouncementChange
+      );
+    };
+  };
+  const getSnapshot = () => {
+    try {
+      return localStorage.getItem(storageKey) !== "1";
+    } catch {
+      return true;
+    }
+  };
+  const visible = useSyncExternalStore(subscribe, getSnapshot, () => false);
 
   const dismiss = () => {
-    setVisible(false);
+    try {
+      localStorage.setItem(storageKey, "1");
+      window.dispatchEvent(new Event("announcement-dismissed"));
+    } catch {
+      // Keep the announcement visible when browser storage is unavailable.
+    }
   };
 
   if (!visible) return null;

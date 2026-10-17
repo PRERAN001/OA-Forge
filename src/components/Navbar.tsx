@@ -95,6 +95,7 @@ export default function Navbar() {
   return (
     <>
       <AnnouncementBar
+        id="launch-oct-2026"
         message="Rooms are live. Invite your team by Code."
         href="/changelog"
         linkText="See what's new"
