@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import {
   Users,
@@ -14,17 +15,13 @@ import {
   LogOut,
   Wifi,
   WifiOff,
-  Layers,
-  Shuffle,
-  CheckSquare,
   SlidersHorizontal,
-  Award,
   Search,
-  ArrowRight,
   X,
   Mail,
   UserPlus,
   AlertTriangle,
+  Sparkles,
 } from 'lucide-react';
 import {
   OAFilterConfig,
@@ -33,7 +30,7 @@ import {
   Question,
 } from '@/types/oa';
 import DifficultyBadge from '@/components/DifficultyBadge';
-import { useOACredit, checkOACredit, fetchUserCreditsFromDB } from '@/lib/userCredits';
+import { checkOACredit, fetchUserCreditsFromDB } from '@/lib/userCredits';
 
 const ORANGE = '#ff9f0a';
 const POLL_INTERVAL_MS = 3000;
@@ -74,7 +71,24 @@ export default function RoomPage({
   const [isAddingPeople, setIsAddingPeople] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState('');
-  const [credits, setCredits] = useState({ loading: true, success: false, message: '', remainingCredits: 0 });
+
+  // Initial credits state loaded from authentic in-memory status
+  const [credits, setCredits] = useState<{
+    loading: boolean;
+    success: boolean;
+    isUnlimited: boolean;
+    message: string;
+    remainingCredits: number;
+  }>(() => {
+    const initial = checkOACredit();
+    return {
+      loading: false,
+      success: initial.success,
+      isUnlimited: initial.isUnlimited,
+      message: initial.message,
+      remainingCredits: initial.remainingCredits,
+    };
+  });
 
   // OA Configuration state (creator only)
   const [showConfig, setShowConfig] = useState(false);
@@ -107,7 +121,7 @@ export default function RoomPage({
       setRoom(data);
       setIsOnline(true);
 
-      // If OA is active, redirect to my session
+      // If OA is active, redirect to candidate's test session
       if (data.status === 'active') {
         const me = data.members.find((m) => m.email === myEmail);
         if (me?.sessionId) {
@@ -121,26 +135,35 @@ export default function RoomPage({
     }
   }, [roomId, myEmail, router]);
 
-  // Fetch user credits
+  // Fetch authentic user credits from DB
   const fetchUserCredits = useCallback(async () => {
-    setCredits(prev => ({ ...prev, loading: true }));
     try {
-      const state = await fetchUserCreditsFromDB(myEmail);
+      const state = await fetchUserCreditsFromDB(myEmail || undefined);
+      const hasUnlimited =
+        state.isUnlimited &&
+        (!state.unlimitedExpiry || new Date(state.unlimitedExpiry).getTime() > Date.now());
+      const hasCredit = hasUnlimited || state.credits > 0;
+
       setCredits({
         loading: false,
-        success: true,
-        message: state.isUnlimited ? '3 Months Unlimited Pass Active' : `Credit available`,
-        remainingCredits: state.isUnlimited ? 999 : state.credits
+        success: hasCredit,
+        isUnlimited: hasUnlimited,
+        message: hasUnlimited
+          ? '3 Months Unlimited Pass Active'
+          : `${state.credits} Credit${state.credits === 1 ? '' : 's'} Available`,
+        remainingCredits: hasUnlimited ? 999 : state.credits,
       });
-    } catch (error) {
+    } catch {
+      const fallback = checkOACredit();
       setCredits({
         loading: false,
-        success: false,
-        message: 'Failed to fetch credits',
-        remainingCredits: 0
+        success: fallback.success,
+        isUnlimited: fallback.isUnlimited,
+        message: fallback.message,
+        remainingCredits: fallback.remainingCredits,
       });
     }
-  }, [myEmail, fetchUserCreditsFromDB]);
+  }, [myEmail]);
 
   useEffect(() => {
     fetchRoom();
@@ -148,6 +171,22 @@ export default function RoomPage({
     const interval = setInterval(fetchRoom, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [fetchRoom, fetchUserCredits]);
+
+  // Listen to credits updates across tabs/windows
+  useEffect(() => {
+    const onCreditsUpdated = () => {
+      const current = checkOACredit();
+      setCredits({
+        loading: false,
+        success: current.success,
+        isUnlimited: current.isUnlimited,
+        message: current.message,
+        remainingCredits: current.remainingCredits,
+      });
+    };
+    window.addEventListener('aura_credits_updated', onCreditsUpdated);
+    return () => window.removeEventListener('aura_credits_updated', onCreditsUpdated);
+  }, []);
 
   // Load stats for config panel
   useEffect(() => {
@@ -203,29 +242,32 @@ export default function RoomPage({
   };
 
   const handleStartOA = async () => {
-    // Ensure we have the latest credits from DB
-    await fetchUserCredits();
-
-    // Credit check (without deducting)
-    const creditResult = checkOACredit();
-    if (!creditResult.success) {
-      setStartError(creditResult.message);
+    // Check credits before firing start request
+    const current = checkOACredit();
+    if (!current.isUnlimited && current.remainingCredits <= 0) {
+      setStartError('You have 0 OA credits remaining. Purchase ₹99 Unlimited Pass or contribute 3 questions to unlock!');
       return;
     }
 
     setIsStarting(true);
     setStartError('');
-    const res = await fetch(`/api/room/${roomId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'start_oa', oaConfig: buildConfig() }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setStartError(data.error || 'Failed to start OA');
+
+    try {
+      const res = await fetch(`/api/room/${roomId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start_oa', oaConfig: buildConfig() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setStartError(data.error || 'Failed to start OA');
+        setIsStarting(false);
+      }
+      // Redirect is handled automatically by poll
+    } catch {
+      setStartError('Network error starting assessment. Please try again.');
       setIsStarting(false);
     }
-    // Redirect handled by poll
   };
 
   const handleLeave = async () => {
@@ -281,7 +323,7 @@ export default function RoomPage({
       setInviteEmails('');
       setInviteSuccess(
         data.added === 0
-          ? 'Everyone entered is already in this room.'
+          ? 'All participants are already in this room.'
           : `${data.added} participant${data.added === 1 ? '' : 's'} added. Share the invite code so they can join.`
       );
       fetchRoom();
@@ -297,7 +339,7 @@ export default function RoomPage({
       <div className="flex h-screen items-center justify-center bg-[#181818] text-white">
         <div className="flex items-center gap-3 font-mono text-sm">
           <RefreshCw className="h-5 w-5 animate-spin" style={{ color: ORANGE }} />
-          Loading room...
+          <span>Loading room environment...</span>
         </div>
       </div>
     );
@@ -305,40 +347,80 @@ export default function RoomPage({
 
   if (!room) return null;
 
-  const filteredTagCounts = stats?.tagCounts.filter((tc) =>
-    tc.name.toLowerCase().includes(tagSearch.toLowerCase())
-  ) || [];
+  const filteredTagCounts =
+    stats?.tagCounts.filter((tc) =>
+      tc.name.toLowerCase().includes(tagSearch.toLowerCase())
+    ) || [];
 
   return (
-    <div className="min-h-screen bg-[#181818] text-white">
+    <div className="min-h-screen bg-[#181818] text-white relative overflow-x-hidden">
+      {/* Background with subtle LeetCode orange glow */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div
+          className="absolute inset-0 opacity-[0.025]"
+          style={{
+            backgroundImage: `
+              linear-gradient(rgba(255,255,255,.8) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(255,255,255,.8) 1px, transparent 1px)
+            `,
+            backgroundSize: '64px 64px',
+          }}
+        />
+        <div
+          className="absolute left-1/2 top-[35%] h-[500px] w-[500px] -translate-x-1/2 rounded-full blur-[140px]"
+          style={{ background: 'rgba(255,159,10,0.035)' }}
+        />
+      </div>
+
       {/* Top bar */}
-      <header className="border-b border-white/[0.07] bg-[#202020] px-5 py-4">
+      <header className="relative z-10 border-b border-white/[0.07] bg-[#202020] px-5 py-4">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="font-bold text-sm" style={{ color: ORANGE }}>
+            <Link href="/" className="font-bold text-sm hover:opacity-90 transition" style={{ color: ORANGE }}>
               OA-Forge
-            </span>
+            </Link>
             <span className="text-white/20">/</span>
             <span className="text-sm text-white/60">Room</span>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px]">
+          <div className="flex items-center gap-3 text-[11px]">
             {isOnline ? (
-              <span className="flex items-center gap-1 text-emerald-400">
+              <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
                 <Wifi className="h-3 w-3" />
                 Live
               </span>
             ) : (
-              <span className="flex items-center gap-1 text-rose-400">
+              <span className="flex items-center gap-1.5 text-rose-400 font-medium">
                 <WifiOff className="h-3 w-3" />
                 Reconnecting...
               </span>
             )}
 
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-3 w-3 text-white/50" />
-              <span className="text-white/50">{credits.loading ? 'Loading...' : credits.message}</span>
-            </div>
+            {/* Credit Status Badge */}
+            {credits.isUnlimited ? (
+              <div className="flex items-center gap-1.5 rounded-lg border border-[#ffa116]/40 bg-[#ffa116]/10 px-2.5 py-1 font-mono text-xs text-[#ffa116] font-semibold">
+                <Sparkles className="h-3.5 w-3.5 text-[#ffa116]" />
+                <span>Unlimited Pass</span>
+              </div>
+            ) : credits.remainingCredits > 0 ? (
+              <div className="flex items-center gap-1.5 rounded-lg border border-white/[0.1] bg-[#282828] px-2.5 py-1 font-mono text-xs text-zinc-300">
+                <Sparkles className="h-3.5 w-3.5 text-[#ffa116]" />
+                <span>{credits.remainingCredits} Credit(s)</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 font-mono text-xs text-rose-400">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  <span>0 Credits</span>
+                </div>
+                <Link
+                  href="/pricing"
+                  className="rounded-lg bg-[#ffa116] hover:bg-[#ffa116]/90 px-2.5 py-1 text-xs font-bold text-[#1a1a1a] transition"
+                >
+                  Get Pass
+                </Link>
+              </div>
+            )}
 
             {!isCreator && (
               <button
@@ -353,15 +435,16 @@ export default function RoomPage({
         </div>
       </header>
 
-      <div className="mx-auto max-w-5xl px-5 py-10 space-y-6">
+      <div className="relative z-10 mx-auto max-w-5xl px-5 py-10 space-y-6">
         {/* Room header */}
-        <div className="rounded-2xl border border-white/[0.08] bg-[#202020] p-6">
+        <div className="rounded-2xl border border-white/[0.08] bg-[#202020] p-6 shadow-xl">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.18em] text-white/30">
+              <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.18em] flex items-center gap-1.5" style={{ color: ORANGE }}>
+                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ORANGE }} />
                 Waiting Room
               </div>
-              <h1 className="text-2xl font-bold tracking-tight">{room.title}</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-white">{room.title}</h1>
               <p className="mt-1 text-sm text-white/40">
                 {room.members.length} member{room.members.length !== 1 ? 's' : ''} • Polling every {POLL_INTERVAL_MS / 1000}s
               </p>
@@ -369,9 +452,12 @@ export default function RoomPage({
 
             {/* Invite code */}
             <div className="flex flex-col items-start gap-2 sm:items-end">
-              <div className="text-[10px] uppercase tracking-widest text-white/30">Invite Code</div>
+              <div className="text-[10px] uppercase tracking-widest text-white/40">Invite Code</div>
               <div className="flex items-center gap-2">
-                <span className="rounded-lg border border-white/[0.15] bg-[#282828] px-4 py-2 font-mono text-lg font-bold tracking-[0.2em]" style={{ color: ORANGE }}>
+                <span
+                  className="rounded-lg border border-[#ffa116]/30 bg-[#282828] px-4 py-2 font-mono text-lg font-bold tracking-[0.2em]"
+                  style={{ color: ORANGE }}
+                >
                   {room.inviteCode}
                 </span>
                 <button
@@ -384,7 +470,8 @@ export default function RoomPage({
               </div>
               <button
                 onClick={copyInviteLink}
-                className="text-[11px] text-white/35 underline hover:text-white/60 transition"
+                className="text-[11px] underline hover:brightness-125 transition"
+                style={{ color: ORANGE }}
               >
                 Copy invite link
               </button>
@@ -418,11 +505,13 @@ export default function RoomPage({
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium">
+                      <span className="truncate text-sm font-medium text-white">
                         {member.name || member.email}
                       </span>
                       {member.email === room.creatorEmail && (
-                        <Crown className="h-3.5 w-3.5 flex-shrink-0" style={{ color: ORANGE }} />
+                        <span title="Room Creator">
+                          <Crown className="h-3.5 w-3.5 flex-shrink-0" style={{ color: ORANGE }} />
+                        </span>
                       )}
                       {member.email === myEmail && (
                         <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-mono text-white/50">
@@ -430,7 +519,7 @@ export default function RoomPage({
                         </span>
                       )}
                     </div>
-                    <span className="text-[11px] text-white/30 truncate">{member.email}</span>
+                    <span className="text-[11px] text-white/30 truncate block">{member.email}</span>
                   </div>
 
                   <div className="h-2 w-2 rounded-full bg-emerald-400" title="Online" />
@@ -439,7 +528,7 @@ export default function RoomPage({
             </div>
 
             {/* Invite hint */}
-            <div className="mt-4 rounded-xl border border-dashed border-white/[0.08] py-3 px-4 text-center text-xs text-white/25">
+            <div className="mt-4 rounded-xl border border-dashed border-white/[0.08] py-3 px-4 text-center text-xs text-white/35">
               Share code{' '}
               <span className="font-mono font-bold" style={{ color: ORANGE }}>
                 {room.inviteCode}
@@ -508,7 +597,14 @@ export default function RoomPage({
 
               {room.oaConfig ? (
                 <div className="space-y-2 text-xs font-mono">
-                  <Row label="Questions" value={room.oaConfig.mode === 'manual' ? `${room.oaConfig.selectedQuestionIds?.length || 0} (manual)` : `${room.oaConfig.questionCount} (random)`} />
+                  <Row
+                    label="Questions"
+                    value={
+                      room.oaConfig.mode === 'manual'
+                        ? `${room.oaConfig.selectedQuestionIds?.length || 0} (manual)`
+                        : `${room.oaConfig.questionCount} (random)`
+                    }
+                  />
                   <Row label="Time Limit" value={`${room.oaConfig.timeLimitMinutes} min`} />
                   <Row label="Mode" value={room.oaConfig.mode} />
                   <div className="flex flex-wrap gap-1 pt-1">
@@ -544,23 +640,25 @@ export default function RoomPage({
                 <button
                   onClick={handleStartOA}
                   disabled={isStarting || room.members.length < 1}
-                  className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold text-black transition disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold text-black transition disabled:opacity-50 shadow-lg hover:brightness-105"
                   style={{ backgroundColor: ORANGE }}
                 >
                   {isStarting ? (
                     <>
-                      <RefreshCw className="h-4 w-4 animate-spin" />
-                      Starting OA...
+                      <RefreshCw className="h-4 w-4 animate-spin text-black" />
+                      <span>Starting OA...</span>
                     </>
                   ) : (
                     <>
-                      <Play className="h-4 w-4" />
-                      Start OA for Everyone
+                      <Play className="h-4 w-4 text-black" />
+                      <span>Start OA for Everyone</span>
                     </>
                   )}
                 </button>
-                <p className="text-center text-[11px] text-white/25">
-                  1 OA credit will be deducted from your account
+                <p className="text-center text-[11px] text-white/35">
+                  {credits.isUnlimited
+                    ? 'Unlimited Pass Active • No credits deducted'
+                    : '1 OA credit will be deducted from your account'}
                 </p>
               </div>
             )}
@@ -590,8 +688,11 @@ export default function RoomPage({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="w-full max-w-2xl rounded-2xl border border-white/[0.1] bg-[#1e1e1e] shadow-2xl my-8">
             <div className="flex items-center justify-between border-b border-white/[0.07] px-6 py-4">
-              <h2 className="text-base font-bold">Configure Assessment</h2>
-              <button onClick={() => setShowConfig(false)} className="text-white/40 hover:text-white">
+              <h2 className="text-base font-bold text-white">Configure Assessment</h2>
+              <button
+                onClick={() => setShowConfig(false)}
+                className="text-white/40 hover:text-white transition"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -616,7 +717,11 @@ export default function RoomPage({
                       <button
                         key={m}
                         onClick={() => setTimeLimitMinutes(m)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition ${timeLimitMinutes === m ? 'bg-[#ff9f0a] text-black border-[#ff9f0a]' : 'bg-[#282828] text-white/50 border-white/[0.1] hover:text-white'}`}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition ${
+                          timeLimitMinutes === m
+                            ? 'bg-[#ff9f0a] text-black border-[#ff9f0a] font-bold'
+                            : 'bg-[#282828] text-white/50 border-white/[0.1] hover:text-white'
+                        }`}
                       >
                         {m}m
                       </button>
@@ -632,8 +737,16 @@ export default function RoomPage({
                   {(['Easy', 'Medium', 'Hard'] as Difficulty[]).map((d) => (
                     <button
                       key={d}
-                      onClick={() => setDifficulties((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d])}
-                      className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${difficulties.includes(d) ? 'border-[#ff9f0a]/40 bg-[#ff9f0a]/10 text-[#ff9f0a]' : 'border-white/[0.08] bg-[#282828] text-white/40'}`}
+                      onClick={() =>
+                        setDifficulties((prev) =>
+                          prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]
+                        )
+                      }
+                      className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${
+                        difficulties.includes(d)
+                          ? 'border-[#ff9f0a]/40 bg-[#ff9f0a]/10 text-[#ff9f0a]'
+                          : 'border-white/[0.08] bg-[#282828] text-white/40 hover:text-white'
+                      }`}
                     >
                       {d}
                     </button>
@@ -641,7 +754,7 @@ export default function RoomPage({
                 </div>
               </div>
 
-              {/* Tags */}
+              {/* Topics / Tags */}
               <div>
                 <label className="block text-xs font-medium text-white/50 mb-2">Topics</label>
                 <div className="relative mb-2">
@@ -660,8 +773,16 @@ export default function RoomPage({
                     return (
                       <button
                         key={tc.name}
-                        onClick={() => setSelectedTags((prev) => active ? prev.filter((t) => t !== tc.name) : [...prev, tc.name])}
-                        className={`px-2.5 py-1 rounded-md text-xs border transition ${active ? 'bg-[#ff9f0a]/10 text-[#ff9f0a] border-[#ff9f0a]/30' : 'bg-[#282828] text-white/40 border-white/[0.08] hover:text-white/70'}`}
+                        onClick={() =>
+                          setSelectedTags((prev) =>
+                            active ? prev.filter((t) => t !== tc.name) : [...prev, tc.name]
+                          )
+                        }
+                        className={`px-2.5 py-1 rounded-md text-xs border transition ${
+                          active
+                            ? 'bg-[#ff9f0a]/10 text-[#ff9f0a] border-[#ff9f0a]/30 font-medium'
+                            : 'bg-[#282828] text-white/40 border-white/[0.08] hover:text-white/70'
+                        }`}
                       >
                         {tc.name}
                       </button>
@@ -677,7 +798,11 @@ export default function RoomPage({
                     <button
                       key={m}
                       onClick={() => setMode(m)}
-                      className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${mode === m ? 'bg-[#ff9f0a] text-black border-[#ff9f0a]' : 'bg-[#282828] text-white/50 border-white/[0.1] hover:text-white'}`}
+                      className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${
+                        mode === m
+                          ? 'bg-[#ff9f0a] text-black border-[#ff9f0a]'
+                          : 'bg-[#282828] text-white/50 border-white/[0.1] hover:text-white'
+                      }`}
                     >
                       {m === 'random' ? '🎲 Random' : '📋 Manual'}
                     </button>
@@ -690,7 +815,11 @@ export default function RoomPage({
                       <button
                         key={n}
                         onClick={() => setQuestionCount(n)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition ${questionCount === n ? 'bg-[#ff9f0a] text-black border-[#ff9f0a]' : 'bg-[#282828] text-white/50 border-white/[0.1] hover:text-white'}`}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition ${
+                          questionCount === n
+                            ? 'bg-[#ff9f0a] text-black border-[#ff9f0a] font-bold'
+                            : 'bg-[#282828] text-white/50 border-white/[0.1] hover:text-white'
+                        }`}
                       >
                         {n}
                       </button>
@@ -711,21 +840,32 @@ export default function RoomPage({
                     <div className="max-h-40 overflow-y-auto border border-white/[0.08] rounded-lg bg-[#282828] divide-y divide-white/[0.05]">
                       {loadingQuestions ? (
                         <div className="p-4 text-center text-xs text-white/30">Loading...</div>
-                      ) : matchingQuestions.slice(0, 30).map((q) => {
-                        const checked = selectedQuestionIds.includes(q.id);
-                        return (
-                          <div
-                            key={q.id}
-                            className="flex items-center gap-3 px-3 py-2 hover:bg-white/[0.04] cursor-pointer"
-                            onClick={() => setSelectedQuestionIds((prev) => checked ? prev.filter((id) => id !== q.id) : [...prev, q.id])}
-                          >
-                            <input type="checkbox" checked={checked} onChange={() => {}} className="accent-[#ff9f0a]" />
-                            <span className="text-[10px] text-white/30 font-mono">#{q.id}</span>
-                            <span className="flex-1 text-xs text-white/70 truncate">{q.title}</span>
-                            <DifficultyBadge difficulty={q.difficulty} size="sm" />
-                          </div>
-                        );
-                      })}
+                      ) : (
+                        matchingQuestions.slice(0, 30).map((q) => {
+                          const checked = selectedQuestionIds.includes(q.id);
+                          return (
+                            <div
+                              key={q.id}
+                              className="flex items-center gap-3 px-3 py-2 hover:bg-white/[0.04] cursor-pointer"
+                              onClick={() =>
+                                setSelectedQuestionIds((prev) =>
+                                  checked ? prev.filter((id) => id !== q.id) : [...prev, q.id]
+                                )
+                              }
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {}}
+                                className="accent-[#ff9f0a]"
+                              />
+                              <span className="text-[10px] text-white/30 font-mono">#{q.id}</span>
+                              <span className="flex-1 text-xs text-white/70 truncate">{q.title}</span>
+                              <DifficultyBadge difficulty={q.difficulty} size="sm" />
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                     <p className="mt-1 text-[10px] text-white/25">{selectedQuestionIds.length} selected</p>
                   </div>
@@ -734,13 +874,16 @@ export default function RoomPage({
             </div>
 
             <div className="border-t border-white/[0.07] px-6 py-4 flex justify-end gap-3">
-              <button onClick={() => setShowConfig(false)} className="px-4 py-2 text-xs rounded-lg text-white/40 hover:text-white transition">
+              <button
+                onClick={() => setShowConfig(false)}
+                className="px-4 py-2 text-xs rounded-lg text-white/40 hover:text-white transition"
+              >
                 Cancel
               </button>
               <button
                 onClick={handleSaveConfig}
                 disabled={isSavingConfig}
-                className="flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-bold text-black transition"
+                className="flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-bold text-black transition hover:brightness-105"
                 style={{ backgroundColor: ORANGE }}
               >
                 {isSavingConfig ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}

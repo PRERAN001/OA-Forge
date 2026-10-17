@@ -6,7 +6,8 @@ import RoomModel from '@/models/RoomModel';
 import { getRandomizedQuestionsFromDB, filterQuestionsFromDB } from '@/lib/questions';
 import { OASession, OAFilterConfig, Question } from '@/types/oa';
 import { saveSessionServer } from '@/lib/sessionStore';
-import { saveOASessionToDB, getUserFromDB, updateUserCreditStatusInDB } from '@/lib/dbServices';
+import { saveOASessionToDB, getUserFromDB, updateUserCreditStatusInDB, syncUserWithMongoDB } from '@/lib/dbServices';
+import PaymentModel from '@/models/PaymentModel';
 
 // GET /api/room/[roomId] — poll room state
 export async function GET(
@@ -121,12 +122,47 @@ export async function POST(
       return NextResponse.json({ error: 'OA already started.' }, { status: 400 });
     }
 
-    // Fetch latest credits from DB
-    const user = await getUserFromDB(session.user.email);
+    // Fetch latest user and credits from DB
+    let user = await getUserFromDB(session.user.email);
+    if (!user) {
+      user = await syncUserWithMongoDB(session.user.email, session.user.name || undefined);
+    }
+
+    let hasUnlimited = !!(user?.isUnlimited && (!user.unlimitedExpiry || new Date(user.unlimitedExpiry).getTime() > Date.now()));
+
+    if (!hasUnlimited) {
+      try {
+        const verifiedPayment = await PaymentModel.findOne({
+          userEmail: session.user.email,
+          status: 'verified',
+          $or: [{ planId: /unlimited/ }, { credits: { $gte: 900 } }],
+        }).sort({ createdAt: -1 });
+
+        if (verifiedPayment) {
+          const purchaseDate = new Date(verifiedPayment.createdAt);
+          const expiry = new Date(purchaseDate);
+          expiry.setMonth(expiry.getMonth() + 3);
+          if (expiry.getTime() > Date.now()) {
+            hasUnlimited = true;
+            await updateUserCreditStatusInDB(session.user.email, {
+              isUnlimited: true,
+              unlimitedExpiry: expiry.toISOString(),
+              credits: 999,
+            });
+            user = await getUserFromDB(session.user.email);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not check verified payment in room route:', err);
+      }
+    }
 
     // Check if the creator has sufficient credits to start the OA
-    if (user && !user.isUnlimited && user.credits <= 0) {
-      return NextResponse.json({ error: 'You have 0 OA credits remaining. Purchase ₹99 Unlimited Pass or contribute 3 questions to unlock!' }, { status: 402 }); // 402 Payment Required
+    if (user && !hasUnlimited && (user.credits ?? 1) <= 0) {
+      return NextResponse.json(
+        { error: 'You have 0 OA credits remaining. Purchase ₹99 Unlimited Pass or contribute 3 questions to unlock!' },
+        { status: 402 }
+      );
     }
 
     const config: OAFilterConfig = body.oaConfig || room.oaConfig;
@@ -201,9 +237,9 @@ export async function POST(
     room.oaConfig = config;
     await room.save();
 
-    // Deduct 1 credit from the creator's account for starting the OA
-    if (user && !user.isUnlimited) {
-      await updateUserCreditStatusInDB(session.user.email, { credits: user.credits - 1 });
+    // Deduct 1 credit from the creator's account for starting the OA (only if not unlimited)
+    if (user && !hasUnlimited) {
+      await updateUserCreditStatusInDB(session.user.email, { credits: Math.max(0, (user.credits ?? 1) - 1) });
     }
 
     return NextResponse.json({

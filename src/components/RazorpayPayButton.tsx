@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { addOACredits } from '@/lib/userCredits';
 import { Lock, RefreshCw, CreditCard } from 'lucide-react';
 
@@ -23,6 +24,8 @@ export default function RazorpayPayButton({
   className = '',
 }: Props) {
   const router = useRouter();
+  const { data: session } = useSession();
+  const userEmail = session?.user?.email || '';
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
@@ -63,13 +66,15 @@ export default function RazorpayPayButton({
         return;
       }
 
+      const isUnlimited = planId.includes('unlimited') || planId === 'unlimited_3months_99';
+
       // Step 2: Open Razorpay Checkout Modal
       if (typeof window !== 'undefined' && (window as any).Razorpay) {
         const options = {
           key: orderData.keyId || 'rzp_test_key',
           amount: orderData.amount, // in paise
           currency: orderData.currency || 'INR',
-          name: 'Aura OA Platform',
+          name: 'OA-Forge',
           description: `Payment for ${planName}`,
           image: 'https://cdn-icons-png.flaticon.com/512/9322/9322127.png',
           order_id: orderData.id,
@@ -84,6 +89,7 @@ export default function RazorpayPayButton({
                 razorpay_signature: response.razorpay_signature || 'mock_sig',
                 planId,
                 credits,
+                userEmail,
               }),
             });
 
@@ -91,7 +97,7 @@ export default function RazorpayPayButton({
 
             if (verifyRes.ok) {
               // Activate 3-month unlimited pass
-              addOACredits(credits, 'purchase', `Purchased ${planName} (₹${amount})`, true);
+              addOACredits(credits, 'purchase', `Purchased ${planName} (₹${amount})`, isUnlimited, userEmail);
 
               // Route to receipt page
               router.push(
@@ -105,8 +111,8 @@ export default function RazorpayPayButton({
             }
           },
           prefill: {
-            name: 'Candidate User',
-            email: 'user@example.com',
+            name: session?.user?.name || 'Candidate User',
+            email: userEmail || 'user@example.com',
             contact: '9876543210',
           },
           theme: {
@@ -123,7 +129,7 @@ export default function RazorpayPayButton({
       } else {
         // Fallback simulation mode
         setTimeout(() => {
-          addOACredits(credits, 'purchase', `Purchased ${planName} (₹${amount})`, true);
+          addOACredits(credits, 'purchase', `Purchased ${planName} (₹${amount})`, isUnlimited, userEmail);
           router.push(
             `/payment-success?orderId=${orderData.id}&paymentId=pay_sim_${Date.now()}&amount=${amount}&credits=${credits}&planName=${encodeURIComponent(
               planName

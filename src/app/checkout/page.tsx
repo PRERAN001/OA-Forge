@@ -64,7 +64,7 @@ function CheckoutContent() {
           key: orderData.keyId || 'rzp_test_key',
           amount: orderData.amount,
           currency: orderData.currency || 'INR',
-          name: 'CodeSprint',
+          name: 'OA-Forge',
           description: `Payment for ${planName}`,
           image: 'https://cdn-icons-png.flaticon.com/512/9322/9322127.png',
           order_id: orderData.id,
@@ -79,18 +79,25 @@ function CheckoutContent() {
                 razorpay_signature: response.razorpay_signature || 'mock_sig',
                 planId,
                 credits,
+                userEmail: email,
               }),
             });
 
             const verifyData = await verifyRes.json();
 
             if (verifyRes.ok) {
+              const isUnlimitedPlan =
+                planId === 'unlimited_pass' ||
+                planId === 'unlimited_3months_99' ||
+                planId.includes('unlimited');
+
               // Add credits to user state
               addOACredits(
                 credits,
                 'purchase',
                 `Purchased ${planName} (₹${amount})`,
-                planId === 'unlimited_pass'
+                isUnlimitedPlan,
+                email
               );
 
               // Route to success page
@@ -123,11 +130,17 @@ function CheckoutContent() {
       } else {
         // Fallback for simulated checkout if script blocked
         setTimeout(async () => {
+          const isUnlimitedPlan =
+            planId === 'unlimited_pass' ||
+            planId === 'unlimited_3months_99' ||
+            planId.includes('unlimited');
+
           addOACredits(
             credits,
             'purchase',
             `Purchased ${planName} (₹${amount})`,
-            planId === 'unlimited_pass'
+            isUnlimitedPlan,
+            email
           );
           router.push(
             `/payment-success?orderId=${orderData.id}&paymentId=pay_sim_${Date.now()}&amount=${amount}&credits=${credits}&planName=${encodeURIComponent(

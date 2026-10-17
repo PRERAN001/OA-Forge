@@ -14,6 +14,15 @@ export interface UserCreditsState {
   }>;
 }
 
+// Clean up any legacy sensitive credit keys from localStorage to prevent tampering
+if (typeof window !== 'undefined') {
+  try {
+    localStorage.removeItem('aura_user_credits_v1');
+  } catch {}
+}
+
+const CONTRIBUTIONS_STORAGE_KEY = 'aura_contributed_questions_v1';
+
 let inMemoryCreditsState: UserCreditsState = {
   credits: 1,
   contributedCount: 0,
@@ -29,15 +38,12 @@ let inMemoryCreditsState: UserCreditsState = {
   ],
 };
 
-const CONTRIBUTIONS_STORAGE_KEY = 'aura_contributed_questions_v1';
-
 export function getUserCredits(): UserCreditsState {
   // Auto-expire unlimited pass if expired
   if (inMemoryCreditsState.isUnlimited && inMemoryCreditsState.unlimitedExpiry) {
     if (new Date(inMemoryCreditsState.unlimitedExpiry).getTime() < Date.now()) {
       inMemoryCreditsState.isUnlimited = false;
       inMemoryCreditsState.unlimitedExpiry = undefined;
-      saveUserCredits(inMemoryCreditsState);
     }
   }
 
@@ -67,7 +73,6 @@ export async function fetchUserCreditsFromDB(email?: string): Promise<UserCredit
           if (new Date(inMemoryCreditsState.unlimitedExpiry).getTime() < Date.now()) {
             inMemoryCreditsState.isUnlimited = false;
             inMemoryCreditsState.unlimitedExpiry = undefined;
-            saveUserCredits(inMemoryCreditsState);
           }
         }
 
@@ -88,14 +93,16 @@ export async function syncUserCreditsWithDB(email: string): Promise<UserCreditsS
   return await fetchUserCreditsFromDB(email);
 }
 
-export async function saveUserCredits(state: UserCreditsState): Promise<void> {
+export async function saveUserCredits(state: UserCreditsState, email?: string): Promise<void> {
   inMemoryCreditsState = { ...state };
+
   if (typeof window === 'undefined') return;
   try {
     await fetch('/api/user/credits', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        email,
         credits: state.credits,
         isUnlimited: state.isUnlimited,
         unlimitedExpiry: state.unlimitedExpiry,
@@ -108,7 +115,7 @@ export async function saveUserCredits(state: UserCreditsState): Promise<void> {
   }
 }
 
-export function resetUserCredits(amount = 1): UserCreditsState {
+export function resetUserCredits(amount = 1, email?: string): UserCreditsState {
   const state: UserCreditsState = {
     credits: amount,
     contributedCount: 0,
@@ -123,11 +130,11 @@ export function resetUserCredits(amount = 1): UserCreditsState {
       },
     ],
   };
-  saveUserCredits(state);
+  saveUserCredits(state, email);
   return state;
 }
 
-export function useOACredit(): { success: boolean; message: string; remainingCredits: number } {
+export function useOACredit(email?: string): { success: boolean; message: string; remainingCredits: number; isUnlimited: boolean } {
   const state = getUserCredits();
 
   // Check 3-month pass expiry
@@ -135,9 +142,9 @@ export function useOACredit(): { success: boolean; message: string; remainingCre
     if (state.unlimitedExpiry && new Date(state.unlimitedExpiry).getTime() < Date.now()) {
       state.isUnlimited = false;
       state.unlimitedExpiry = undefined;
-      saveUserCredits(state);
+      saveUserCredits(state, email);
     } else {
-      return { success: true, message: '3 Months Unlimited Pass Active', remainingCredits: 999 };
+      return { success: true, message: '3 Months Unlimited Pass Active', remainingCredits: 999, isUnlimited: true };
     }
   }
 
@@ -146,16 +153,17 @@ export function useOACredit(): { success: boolean; message: string; remainingCre
       success: false,
       message: 'You have 0 OA credits remaining. Purchase ₹99 Unlimited Pass or contribute 3 questions to unlock!',
       remainingCredits: 0,
+      isUnlimited: false,
     };
   }
 
   state.credits = Math.max(0, state.credits - 1);
-  saveUserCredits(state);
+  saveUserCredits(state, email);
 
-  return { success: true, message: '1 Credit Used', remainingCredits: state.credits };
+  return { success: true, message: '1 Credit Used', remainingCredits: state.credits, isUnlimited: false };
 }
 
-export function checkOACredit(): { success: boolean; message: string; remainingCredits: number } {
+export function checkOACredit(): { success: boolean; message: string; remainingCredits: number; isUnlimited: boolean } {
   const state = getUserCredits();
 
   // Check 3-month pass expiry
@@ -165,7 +173,7 @@ export function checkOACredit(): { success: boolean; message: string; remainingC
       state.unlimitedExpiry = undefined;
       saveUserCredits(state);
     } else {
-      return { success: true, message: '3 Months Unlimited Pass Active', remainingCredits: 999 };
+      return { success: true, message: '3 Months Unlimited Pass Active', remainingCredits: 999, isUnlimited: true };
     }
   }
 
@@ -174,17 +182,19 @@ export function checkOACredit(): { success: boolean; message: string; remainingC
       success: false,
       message: 'You have 0 OA credits remaining. Purchase ₹99 Unlimited Pass or contribute 3 questions to unlock!',
       remainingCredits: 0,
+      isUnlimited: false,
     };
   }
 
-  return { success: true, message: 'Credit available', remainingCredits: state.credits };
+  return { success: true, message: `${state.credits} Credit${state.credits === 1 ? '' : 's'} Available`, remainingCredits: state.credits, isUnlimited: false };
 }
 
 export function addOACredits(
   amount: number,
   type: 'purchase' | 'contribution',
   description: string,
-  setUnlimited = false
+  setUnlimited = false,
+  userEmail?: string
 ): UserCreditsState {
   const state = getUserCredits();
   if (setUnlimited) {
@@ -192,8 +202,10 @@ export function addOACredits(
     const expiry = new Date();
     expiry.setMonth(expiry.getMonth() + 3);
     state.unlimitedExpiry = expiry.toISOString();
+    state.credits = Math.max(state.credits, 999);
+  } else {
+    state.credits += amount;
   }
-  state.credits += amount;
   state.history.unshift({
     id: 'tx_' + Math.random().toString(36).substring(2, 9),
     type,
@@ -202,7 +214,7 @@ export function addOACredits(
     timestamp: new Date().toISOString(),
   });
 
-  saveUserCredits(state);
+  saveUserCredits(state, userEmail);
   return state;
 }
 

@@ -24,13 +24,15 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { saveSessionLocal } from '@/lib/sessionStore';
-import { useOACredit, getUserCredits } from '@/lib/userCredits';
+import { useOACredit, getUserCredits, fetchUserCreditsFromDB } from '@/lib/userCredits';
 import RazorpayPayButton from './RazorpayPayButton';
+import { useSession } from 'next-auth/react';
 import { CreditCard, FilePlus, AlertCircle, Sparkles } from 'lucide-react';
 import { UserPlus, UsersRound } from 'lucide-react';
 
 export default function OACustomizer() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
 
   // Dataset statistics
@@ -91,6 +93,13 @@ export default function OACustomizer() {
     }
     fetchStats();
   }, []);
+
+  // Sync authentic credits state from DB
+  useEffect(() => {
+    if (session?.user?.email) {
+      fetchUserCreditsFromDB(session.user.email);
+    }
+  }, [session?.user?.email]);
 
   // Fetch matching questions whenever filters change
   useEffect(() => {
@@ -164,11 +173,18 @@ export default function OACustomizer() {
       return;
     }
 
-    // Check & Deduct OA Credit
-    const creditCheck = useOACredit();
-    if (!creditCheck.success) {
-      setShowNoCreditsModal(true);
-      return;
+    // Check & Deduct OA Credit (if not unlimited)
+    const userState = getUserCredits();
+    const hasUnlimited =
+      userState.isUnlimited &&
+      (!userState.unlimitedExpiry || new Date(userState.unlimitedExpiry).getTime() > Date.now());
+
+    if (!hasUnlimited) {
+      const creditCheck = useOACredit(session?.user?.email || undefined);
+      if (!creditCheck.success) {
+        setShowNoCreditsModal(true);
+        return;
+      }
     }
 
     setIsCreating(true);
@@ -858,11 +874,11 @@ export default function OACustomizer() {
                   </p>
                   <RazorpayPayButton
                     planId="unlimited_3months_99"
-                    amount={1}
+                    amount={99}
                     credits={999}
                     planName="3 Months Unlimited Pro Pass"
                     buttonText="Pay ₹99 & Unlock 3 Months Pass"
-                    className="w-full mt-1 py-2 rounded bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-1.5"
+                    className="w-full mt-1 py-2.5 rounded-lg bg-[#ffa116] hover:bg-[#ffa116]/90 text-[#1a1a1a] font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition"
                   />
                 </div>
 
@@ -873,7 +889,7 @@ export default function OACustomizer() {
                       <FilePlus className="h-4 w-4 text-amber-400" />
                       Option B: Contribute 3 Questions (FREE)
                     </span>
-                    <span className="text-emerald-400">Free</span>
+                    <span className="text-emerald-400 font-mono text-xs">Free</span>
                   </div>
                   <p className="text-zinc-400 text-[11px]">
                     Submit 3 algorithm questions with problem descriptions, test cases & edge cases.
@@ -884,7 +900,7 @@ export default function OACustomizer() {
                       setShowNoCreditsModal(false);
                       router.push('/contribute');
                     }}
-                    className="w-full mt-1 py-2 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-amber-400 font-bold text-xs"
+                    className="w-full mt-1 py-2.5 rounded-lg bg-[#1e1e1e] hover:bg-[#282828] border border-amber-500/30 text-[#ffa116] font-bold text-xs transition"
                   >
                     Contribute Questions (+1 Free OA)
                   </button>

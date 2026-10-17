@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { recordPaymentToDB, updateUserCreditStatusInDB } from '@/lib/dbServices';
+import { recordPaymentToDB, updateUserCreditStatusInDB, syncUserWithMongoDB } from '@/lib/dbServices';
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (email) {
+      await syncUserWithMongoDB(email, session?.user?.name || undefined);
       const expiry = new Date();
       expiry.setMonth(expiry.getMonth() + 3);
       await updateUserCreditStatusInDB(email, {
