@@ -16,7 +16,7 @@ const PaymentSchema: Schema<IPayment> = new Schema(
   {
     orderId: { type: String, required: true, unique: true, index: true },
     paymentId: { type: String, index: true },
-    userEmail: { type: String, index: true },
+    userEmail: { type: String, index: true, lowercase: true, trim: true },
     planId: { type: String, required: true },
     amount: { type: Number, required: true },
     currency: { type: String, default: 'INR' },

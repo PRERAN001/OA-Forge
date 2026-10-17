@@ -2,17 +2,42 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { OASession } from '@/types/oa';
-import { getAllSessionsLocal } from '@/lib/sessionStore';
-import { Trophy, Clock, Award, ArrowRight, AlertCircle, Plus } from 'lucide-react';
+import GoogleSignInButton from '@/components/GoogleSignInButton';
+import { Trophy, Clock, Award, ArrowRight, AlertCircle, Plus, RefreshCw, LogIn } from 'lucide-react';
 
 export default function HistoryPage() {
+  const { data: session, status } = useSession();
   const [sessions, setSessions] = useState<OASession[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const list = getAllSessionsLocal();
-    setSessions(list);
-  }, []);
+    if (status === 'loading') return;
+
+    if (!session?.user?.email) {
+      setSessions([]);
+      setLoading(false);
+      return;
+    }
+
+    async function loadHistory() {
+      try {
+        setLoading(true);
+        const res = await fetch('/api/oa/history');
+        if (res.ok) {
+          const data = await res.json();
+          setSessions(data.sessions || []);
+        }
+      } catch (err) {
+        console.error('Failed to load history:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadHistory();
+  }, [session?.user?.email, status]);
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 py-8 space-y-6">
@@ -29,12 +54,28 @@ export default function HistoryPage() {
         </p>
       </div>
 
-      {sessions.length === 0 ? (
+      {loading ? (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-12 text-center space-y-3">
+          <RefreshCw className="h-7 w-7 animate-spin text-amber-400 mx-auto" />
+          <p className="text-zinc-400 text-xs font-mono">Loading your assessment history from database...</p>
+        </div>
+      ) : !session?.user?.email ? (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-12 text-center space-y-4">
+          <LogIn className="h-10 w-10 text-amber-400 mx-auto" />
+          <h3 className="text-base font-bold text-white">Sign In to View Assessment History</h3>
+          <p className="text-zinc-400 text-xs max-w-md mx-auto">
+            Your assessment records are securely saved to your account. Sign in with Google to view your test scores and past submissions.
+          </p>
+          <div className="pt-2 flex justify-center">
+            <GoogleSignInButton />
+          </div>
+        </div>
+      ) : sessions.length === 0 ? (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-12 text-center space-y-4">
           <AlertCircle className="h-10 w-10 text-zinc-600 mx-auto" />
           <h3 className="text-base font-bold text-white">No Past Assessments Found</h3>
           <p className="text-zinc-400 text-xs max-w-md mx-auto">
-            You haven&apos;t taken any Online Assessments yet. Customize your first OA test now!
+            You haven&apos;t taken any Online Assessments yet under this account. Customize your first OA test now!
           </p>
           <Link
             href="/"

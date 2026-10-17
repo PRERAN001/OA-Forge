@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { recordPaymentToDB, updateUserCreditStatusInDB, syncUserWithMongoDB } from '@/lib/dbServices';
+import { normalizeEmail, recordPaymentToDB, updateUserCreditStatusInDB, syncUserWithMongoDB } from '@/lib/dbServices';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,10 +16,26 @@ export async function POST(request: NextRequest) {
       userEmail: bodyEmail,
     } = await request.json();
 
-    const email = session?.user?.email || bodyEmail;
+    const rawEmail = session?.user?.email || bodyEmail;
+    const email = normalizeEmail(rawEmail);
+
+    if (!email) {
+      return NextResponse.json(
+        { error: 'User email is required to verify payment and activate pass.' },
+        { status: 400 }
+      );
+    }
+
     const key_secret = process.env.RAZORPAY_KEY_SECRET;
 
-    if (key_secret && razorpay_signature) {
+    if (key_secret) {
+      if (!razorpay_signature || !razorpay_order_id || !razorpay_payment_id) {
+        return NextResponse.json(
+          { error: 'Missing payment signature or transaction details.' },
+          { status: 400 }
+        );
+      }
+
       const body = razorpay_order_id + '|' + razorpay_payment_id;
       const expectedSignature = crypto
         .createHmac('sha256', key_secret)
@@ -54,16 +70,14 @@ export async function POST(request: NextRequest) {
       status: 'verified',
     });
 
-    if (email) {
-      await syncUserWithMongoDB(email, session?.user?.name || undefined);
-      const expiry = new Date();
-      expiry.setMonth(expiry.getMonth() + 3);
-      await updateUserCreditStatusInDB(email, {
-        isUnlimited: true,
-        unlimitedExpiry: expiry.toISOString(),
-        credits: 999,
-      });
-    }
+    await syncUserWithMongoDB(email, session?.user?.name || undefined);
+    const expiry = new Date();
+    expiry.setMonth(expiry.getMonth() + 3);
+    await updateUserCreditStatusInDB(email, {
+      isUnlimited: true,
+      unlimitedExpiry: expiry.toISOString(),
+      credits: 999,
+    });
 
     return NextResponse.json({
       status: 'success',

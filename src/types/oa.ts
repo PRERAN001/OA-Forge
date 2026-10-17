@@ -34,6 +34,7 @@ export interface OAFilterConfig {
   timeLimitMinutes: number;
   pointsConfig: PointsConfig;
   title?: string;
+  isPOTD?: boolean;
 }
 
 export interface Submission {
@@ -59,6 +60,7 @@ export interface OASession {
   timeLimitMinutes: number;
   config: OAFilterConfig;
   questions: Question[];
+  userEmail?: string;
   submissions: Record<number, Submission>; // questionId -> Submission
   totalScore: number;
   maxScore: number;

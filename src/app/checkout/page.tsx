@@ -2,22 +2,31 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { addOACredits } from '@/lib/userCredits';
 import { CreditCard, ShieldCheck, Lock, ArrowLeft, RefreshCw } from 'lucide-react';
 
 function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
 
   const planId = searchParams.get('planId') || 'single_oa';
   const amount = parseFloat(searchParams.get('amount') || '49');
   const credits = parseInt(searchParams.get('credits') || '1', 10);
   const planName = searchParams.get('name') || 'Single Assessment Pass';
 
-  const [name, setName] = useState('John Doe');
-  const [email, setEmail] = useState('john@example.com');
-  const [phone, setPhone] = useState('9876543210');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    if (session?.user) {
+      if (session.user.name && !name) setName(session.user.name);
+      if (session.user.email && !email) setEmail(session.user.email);
+    }
+  }, [session, name, email]);
 
   // Load Razorpay Script dynamically
   useEffect(() => {
@@ -47,6 +56,7 @@ function CheckoutContent() {
           amount,
           currency: 'INR',
           credits,
+          userEmail: email || session?.user?.email || '',
         }),
       });
 

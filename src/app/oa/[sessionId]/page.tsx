@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, use, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { OASession } from "@/types/oa";
 import { getSessionLocal, saveSessionLocal } from "@/lib/sessionStore";
 import { getStarterTemplate } from "@/lib/starterTemplates";
@@ -30,6 +31,7 @@ import {
   ChevronUp,
   ChevronDown,
   CloudUpload,
+  Flame,
 } from "lucide-react";
 
 type OutputState = "passed" | "failed" | "error";
@@ -218,6 +220,18 @@ export default function TakeOAPage({
         saveSessionLocal(data.session);
       }
 
+      // Purge temporary session drafts from localStorage
+      try {
+        if (typeof window !== "undefined") {
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const k = localStorage.key(i);
+            if (k && k.includes(session.id)) {
+              localStorage.removeItem(k);
+            }
+          }
+        }
+      } catch {}
+
       router.push(`/oa/results/${session.id}`);
     } catch (error) {
       console.error("Error completing assessment", error);
@@ -229,19 +243,19 @@ export default function TakeOAPage({
 
   useEffect(() => {
     async function loadSession() {
-      // First try local storage
-      let sess = getSessionLocal(sessionId);
-
-      // Fallback to server API
-      if (!sess) {
-        try {
-          const res = await fetch(`/api/oa/${sessionId}`);
-          if (res.ok) {
-            sess = await res.json();
-          }
-        } catch (e) {
-          console.error("Failed to fetch session from API", e);
+      let sess: OASession | null = null;
+      try {
+        const res = await fetch(`/api/oa/${sessionId}`);
+        if (res.ok) {
+          sess = await res.json();
         }
+      } catch (e) {
+        console.error("Failed to fetch session from API", e);
+      }
+
+      // Offline fallback only if network fails
+      if (!sess) {
+        sess = getSessionLocal(sessionId) || null;
       }
 
       if (sess) {
@@ -286,6 +300,7 @@ export default function TakeOAPage({
   // Fullscreen Enforcement & ESC key exit effect (Top level hook call)
   useEffect(() => {
     if (!session || loading) return;
+    if (session.config?.isPOTD) return;
 
     // Defer the request so the effect only subscribes to browser events
     const fullscreenRequest = window.setTimeout(() => {
@@ -650,8 +665,23 @@ export default function TakeOAPage({
       <header className="grid h-12 shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-[#383838] bg-[#282828] px-3">
         {/* Left: title + question navigator */}
         <div className="flex items-center gap-3 min-w-0">
+          {session.config?.isPOTD ? (
+            <Link
+              href="/potd"
+              className="flex items-center gap-1 text-zinc-400 hover:text-white text-xs font-semibold px-2 py-1 rounded bg-[#1e1e1e] hover:bg-[#383838] border border-[#383838] transition shrink-0"
+              title="Return to Problem of the Day"
+            >
+              <ArrowLeft className="h-3.5 w-3.5 text-[#ffa116]" />
+              <span className="hidden sm:inline">POTD</span>
+            </Link>
+          ) : null}
+
           <span className="font-bold text-sm text-white flex items-center gap-1.5 truncate">
-            <Sparkles className="h-4 w-4 shrink-0 text-[#ffa116]" />
+            {session.config?.isPOTD ? (
+              <Flame className="h-4 w-4 shrink-0 text-[#ffa116] fill-[#ffa116]/20" />
+            ) : (
+              <Sparkles className="h-4 w-4 shrink-0 text-[#ffa116]" />
+            )}
             <span className="truncate">{session.title}</span>
           </span>
 
@@ -750,13 +780,20 @@ export default function TakeOAPage({
 
         {/* Right: fullscreen hint, timer, score, finish */}
         <div className="flex items-center justify-end gap-3">
-          <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#1e1e1e] border border-[#383838] text-[11px] font-mono text-zinc-400">
-            <Maximize className="h-3 w-3 text-[#ffa116]" />
-            <span>Fullscreen</span>
-            <span className="text-rose-400 text-[10px] ml-1 font-sans">
-              (ESC Ends OA)
-            </span>
-          </div>
+          {session.config?.isPOTD ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-[11px] font-mono text-amber-400">
+              <Flame className="h-3.5 w-3.5 text-amber-400 fill-amber-400/20" />
+              <span>Problem of the Day</span>
+            </div>
+          ) : (
+            <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#1e1e1e] border border-[#383838] text-[11px] font-mono text-zinc-400">
+              <Maximize className="h-3 w-3 text-[#ffa116]" />
+              <span>Fullscreen</span>
+              <span className="text-rose-400 text-[10px] ml-1 font-sans">
+                (ESC Ends OA)
+              </span>
+            </div>
+          )}
 
           <Timer
             timeLimitMinutes={session.timeLimitMinutes}
@@ -1527,7 +1564,7 @@ export default function TakeOAPage({
       )}
 
       {/* ===================== Fullscreen Required Overlay ===================== */}
-      {!isFullscreen && !isFinished && (
+      {!session?.config?.isPOTD && !isFullscreen && !isFinished && (
         <div
           role="dialog"
           aria-modal="true"

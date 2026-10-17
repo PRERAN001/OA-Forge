@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Razorpay from 'razorpay';
-import { recordPaymentToDB } from '@/lib/dbServices';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { normalizeEmail, recordPaymentToDB } from '@/lib/dbServices';
 
 export async function POST(request: NextRequest) {
   try {
-    const { planId, amount, currency = 'INR', credits, userEmail } = await request.json();
+    const session = await getServerSession(authOptions);
+    const { planId, amount, currency = 'INR', credits, userEmail: bodyEmail } = await request.json();
+    const userEmail = normalizeEmail(session?.user?.email || bodyEmail);
 
     const key_id = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
     const key_secret = process.env.RAZORPAY_KEY_SECRET;

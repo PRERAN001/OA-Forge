@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Question, Difficulty, DatasetStats } from '@/types/oa';
 import DifficultyBadge from '@/components/DifficultyBadge';
 import CodeEditor from '@/components/CodeEditor';
@@ -11,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Flame,
 } from 'lucide-react';
 
 export default function QuestionsPage() {
@@ -94,6 +96,29 @@ export default function QuestionsPage() {
         <p className="text-zinc-400 text-xs max-w-2xl">
           Browse and search algorithm questions complete with difficulty levels, topic tags, starter templates, and sample test cases.
         </p>
+      </div>
+
+      {/* POTD Spotlight Banner */}
+      <div className="rounded-xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-zinc-900/40 to-transparent p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-500/30 text-[#ffa116]">
+            <Flame className="h-6 w-6 fill-amber-500/30" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-white text-sm sm:text-base">Today&apos;s Problem of the Day</span>
+              <span className="rounded bg-amber-500/20 text-amber-400 text-[10px] px-2 py-0.5 font-bold font-mono">+1 OA Credit</span>
+            </div>
+            <p className="text-zinc-400 text-xs mt-0.5">Solve today&apos;s daily challenge in our assessment workspace to build your streak and earn free credits.</p>
+          </div>
+        </div>
+
+        <Link
+          href="/potd"
+          className="w-full sm:w-auto rounded-lg bg-[#ffa116] hover:bg-[#ffa116]/90 px-4 py-2 text-center font-bold text-[#1a1a1a] text-xs transition whitespace-nowrap shadow-md"
+        >
+          View Today&apos;s POTD →
+        </Link>
       </div>
 
       {/* Filter Toolbar */}

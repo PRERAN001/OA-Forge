@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { getSessionServer, saveSessionServer } from '@/lib/sessionStore';
 import { OASession, Submission } from '@/types/oa';
 import { executeOnJudge0 } from '@/lib/judge0';
-import { getOASessionFromDB } from '@/lib/dbServices';
+import { getOASessionFromDB, saveOASessionToDB, normalizeEmail } from '@/lib/dbServices';
+import { getQuestionByIdFromDB } from '@/lib/questions';
 
 export async function GET(
   request: NextRequest,
@@ -25,7 +28,16 @@ export async function GET(
     return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   }
 
-  return NextResponse.json(session);
+  // Return client-safe copy hiding hidden test cases beyond first 3 samples
+  const clientSafeQuestions = session.questions.map((q) => ({
+    ...q,
+    inputOutput: (q.inputOutput || []).slice(0, 3),
+  }));
+
+  return NextResponse.json({
+    ...session,
+    questions: clientSafeQuestions,
+  });
 }
 
 export async function POST(
@@ -56,7 +68,7 @@ export async function POST(
     }
   }
 
-    if (action === 'submit_question') {
+  if (action === 'submit_question') {
     const question = session.questions.find((q) => q.id === questionId);
     if (!question) {
       return NextResponse.json({ error: 'Question not found' }, { status: 400 });
@@ -64,7 +76,13 @@ export async function POST(
 
     const code = submission.code || '';
     const lang = submission.language || 'python';
-    const testCases = question.inputOutput || [];
+    let testCases = question.inputOutput || [];
+    if (testCases.length <= 3) {
+      const fullQ = await getQuestionByIdFromDB(Number(questionId));
+      if (fullQ?.inputOutput && fullQ.inputOutput.length > testCases.length) {
+        testCases = fullQ.inputOutput;
+      }
+    }
 
     const execResult = await executeOnJudge0(code, question.entryPoint, testCases, lang);
 
@@ -111,6 +129,30 @@ export async function POST(
 
     saveSessionServer(session);
 
+    const authSession = await getServerSession(authOptions);
+    const userEmail = normalizeEmail(authSession?.user?.email || session.userEmail);
+    if (userEmail) {
+      await saveOASessionToDB(session, userEmail);
+
+      // If this OA session is a POTD and all test cases passed, record POTD solve and reward
+      if (session.config?.isPOTD && passedCount === totalTests) {
+        try {
+          const { recordPOTDSolve, getTodayDateStr } = await import('@/lib/potd');
+          await recordPOTDSolve(
+            userEmail,
+            questionId,
+            code,
+            lang,
+            execResult.runtime,
+            execResult.memory,
+            getTodayDateStr()
+          );
+        } catch (potdErr) {
+          console.warn('Error recording POTD solve:', potdErr);
+        }
+      }
+    }
+
     const clientExecution = {
       status: execResult.status,
       runtime: execResult.runtime,
@@ -126,11 +168,19 @@ export async function POST(
       totalPassed: passedCount,
     };
 
+    const clientSafeQuestions = session.questions.map((q) => ({
+      ...q,
+      inputOutput: (q.inputOutput || []).slice(0, 3),
+    }));
+
     return NextResponse.json({
       message: 'Question submitted successfully',
       submission: fullSubmission,
       execution: clientExecution,
-      session,
+      session: {
+        ...session,
+        questions: clientSafeQuestions,
+      },
     });
   }
 
@@ -146,9 +196,23 @@ export async function POST(
 
     saveSessionServer(session);
 
+    const authSession = await getServerSession(authOptions);
+    const userEmail = normalizeEmail(authSession?.user?.email || session.userEmail);
+    if (userEmail) {
+      await saveOASessionToDB(session, userEmail);
+    }
+
+    const clientSafeQuestions = session.questions.map((q) => ({
+      ...q,
+      inputOutput: (q.inputOutput || []).slice(0, 3),
+    }));
+
     return NextResponse.json({
       message: 'Assessment completed successfully',
-      session,
+      session: {
+        ...session,
+        questions: clientSafeQuestions,
+      },
     });
   }
 

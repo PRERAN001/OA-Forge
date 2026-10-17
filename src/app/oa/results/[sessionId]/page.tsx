@@ -3,7 +3,6 @@
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { OASession, Question } from '@/types/oa';
-import { getSessionLocal } from '@/lib/sessionStore';
 import DifficultyBadge from '@/components/DifficultyBadge';
 import CodeEditor from '@/components/CodeEditor';
 import confetti from 'canvas-confetti';
@@ -19,6 +18,7 @@ import {
   FileCode,
   X,
   BookOpen,
+  Flame,
 } from 'lucide-react';
 
 export default function OAResultsPage({
@@ -34,32 +34,26 @@ export default function OAResultsPage({
 
   useEffect(() => {
     async function loadSession() {
-      let sess = getSessionLocal(sessionId);
+      try {
+        const res = await fetch(`/api/oa/${sessionId}`);
+        if (res.ok) {
+          const sess = await res.json();
+          setSession(sess);
 
-      if (!sess) {
-        try {
-          const res = await fetch(`/api/oa/${sessionId}`);
-          if (res.ok) {
-            sess = await res.json();
+          const pct = (sess.totalScore / (sess.maxScore || 1)) * 100;
+          if (pct >= 50) {
+            confetti({
+              particleCount: 80,
+              spread: 60,
+              origin: { y: 0.6 },
+            });
           }
-        } catch (e) {
-          console.error('Failed to load session from API', e);
         }
+      } catch (e) {
+        console.error('Failed to load session from API', e);
+      } finally {
+        setLoading(false);
       }
-
-      if (sess) {
-        setSession(sess);
-
-        const pct = (sess.totalScore / (sess.maxScore || 1)) * 100;
-        if (pct >= 50) {
-          confetti({
-            particleCount: 80,
-            spread: 60,
-            origin: { y: 0.6 },
-          });
-        }
-      }
-      setLoading(false);
     }
 
     loadSession();
@@ -105,8 +99,9 @@ export default function OAResultsPage({
         </div>
 
         <div className="space-y-1">
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">
-            Assessment Performance Report
+          <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center justify-center gap-2">
+            {session.config?.isPOTD && <Flame className="h-7 w-7 text-amber-500 fill-amber-500/20" />}
+            {session.config?.isPOTD ? 'Problem of the Day Completed!' : 'Assessment Performance Report'}
           </h1>
           <p className="text-zinc-400 text-xs font-mono">{session.title}</p>
         </div>
@@ -139,9 +134,18 @@ export default function OAResultsPage({
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center justify-center gap-3 pt-4 border-t border-zinc-800">
+          {session.config?.isPOTD && (
+            <Link
+              href="/potd"
+              className="flex items-center gap-2 rounded-lg bg-amber-500 border border-amber-400/40 px-5 py-2.5 font-bold text-zinc-950 text-xs hover:bg-amber-400 transition"
+            >
+              <Flame className="h-4 w-4" />
+              View Today&apos;s POTD & Streak
+            </Link>
+          )}
           <Link
             href="/"
-            className="flex items-center gap-2 rounded-lg bg-amber-500 border border-amber-400/40 px-5 py-2.5 font-bold text-zinc-950 text-xs hover:bg-amber-400 transition"
+            className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-5 py-2.5 font-semibold text-zinc-200 hover:bg-zinc-800 transition text-xs"
           >
             Create New Assessment
             <ArrowRight className="h-4 w-4" />

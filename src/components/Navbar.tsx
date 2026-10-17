@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
-import { getUserCredits, fetchUserCreditsFromDB } from '@/lib/userCredits';
+import { getUserCredits, fetchUserCreditsFromDB, resetCreditsInMemory } from '@/lib/userCredits';
 import GoogleSignInButton from './GoogleSignInButton';
 import {
   Zap,
@@ -15,6 +15,7 @@ import {
   CreditCard,
   Sparkles,
   LogOut,
+  Flame,
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -31,13 +32,21 @@ export default function Navbar() {
       setIsUnlimited(uState.isUnlimited);
     };
 
+    if (status === 'unauthenticated') {
+      resetCreditsInMemory();
+      update();
+      return;
+    }
+
     update();
 
     // Fetch authentic user credits status from DB on mount / session load
-    fetchUserCreditsFromDB(session?.user?.email || undefined).then((uState) => {
-      setCredits(uState.credits);
-      setIsUnlimited(uState.isUnlimited);
-    });
+    if (session?.user?.email) {
+      fetchUserCreditsFromDB(session.user.email).then((uState) => {
+        setCredits(uState.credits);
+        setIsUnlimited(uState.isUnlimited);
+      });
+    }
 
     window.addEventListener('storage', update);
     window.addEventListener('roundzero_credits_updated', update);
@@ -55,6 +64,7 @@ export default function Navbar() {
 
   const links = [
     { href: '/', label: 'OA Builder', icon: Zap },
+    { href: '/potd', label: 'Daily POTD', icon: Flame },
     { href: '/questions', label: 'Question Bank', icon: BookOpen },
     { href: '/contribute', label: 'Contribute (+1 OA)', icon: FilePlus },
     { href: '/pricing', label: 'Pricing & Passes', icon: CreditCard },
@@ -89,7 +99,13 @@ export default function Navbar() {
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" />
-                {link.label}
+                <span>{link.label}</span>
+                {link.href === '/potd' && ((session?.user as any)?.potdStreak ?? 0) > 0 && (
+                  <span className="flex items-center gap-0.5 rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 text-[10px] font-bold text-amber-400 font-mono">
+                    <Flame className="h-2.5 w-2.5 fill-amber-400" />
+                    {(session?.user as any).potdStreak}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -131,7 +147,10 @@ export default function Navbar() {
                 </div>
               )}
               <button
-                onClick={() => signOut({ callbackUrl: '/' })}
+                onClick={async () => {
+                  resetCreditsInMemory();
+                  await signOut({ callbackUrl: '/' });
+                }}
                 className="p-1 rounded text-zinc-400 hover:text-rose-400 hover:bg-[#282828] transition"
                 title="Sign Out"
               >

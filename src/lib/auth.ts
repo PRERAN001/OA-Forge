@@ -17,9 +17,27 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session?.user) {
         (session.user as any).id = token.sub;
-        if (session.user.email) {
-          // Sync logged-in user with MongoDB database
-          syncUserWithMongoDB(session.user.email, session.user.name || undefined, session.user.image || undefined);
+        const rawEmail = session.user.email || (token.email as string);
+        if (rawEmail) {
+          const normEmail = rawEmail.trim().toLowerCase();
+          session.user.email = normEmail;
+          // Sync logged-in user with MongoDB database and retrieve live credits status
+          const dbUser = await syncUserWithMongoDB(
+            normEmail,
+            session.user.name || undefined,
+            session.user.image || undefined
+          );
+          if (dbUser) {
+            (session.user as any).credits = dbUser.isUnlimited
+              ? Math.max(dbUser.credits ?? 1, 999)
+              : (dbUser.credits ?? 1);
+            (session.user as any).isUnlimited = !!dbUser.isUnlimited;
+            (session.user as any).unlimitedExpiry = dbUser.unlimitedExpiry
+              ? new Date(dbUser.unlimitedExpiry).toISOString()
+              : undefined;
+            (session.user as any).potdStreak = dbUser.potdStreak || 0;
+            (session.user as any).potdLastSolvedDate = dbUser.potdLastSolvedDate;
+          }
         }
       }
       return session;
@@ -27,6 +45,9 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        if (user.email) {
+          token.email = user.email.trim().toLowerCase();
+        }
       }
       return token;
     },

@@ -2,9 +2,11 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import { resetCreditsInMemory } from "@/lib/userCredits";
 
 export default function GoogleSignInButton() {
   const handleGoogleSignIn = () => {
+    resetCreditsInMemory();
     const width = 500;
     const height = 650;
 

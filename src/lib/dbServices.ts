@@ -5,23 +5,73 @@ import OASessionModel from '@/models/OASessionModel';
 import PaymentModel from '@/models/PaymentModel';
 import { OASession } from '@/types/oa';
 
+export function normalizeEmail(email?: string): string {
+  return email ? email.trim().toLowerCase() : '';
+}
+
+export function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function emailQuery(email: string) {
+  const norm = normalizeEmail(email);
+  return {
+    $or: [
+      { email: norm },
+      { email: { $regex: new RegExp(`^${escapeRegex(norm)}$`, 'i') } },
+    ],
+  };
+}
+
 export async function syncUserWithMongoDB(email: string, name?: string, image?: string) {
   try {
     const conn = await connectToDatabase();
     if (!conn) return null;
 
-    let user = await UserModel.findOne({ email });
+    const normEmail = normalizeEmail(email);
+    if (!normEmail) return null;
+
+    let user = await UserModel.findOne(emailQuery(normEmail));
     if (!user) {
       user = await UserModel.create({
-        email,
+        email: normEmail,
         name: name || 'User',
         image: image || '',
         credits: 1,
         isUnlimited: false,
         contributedCount: 0,
       });
-      console.log('Created new MongoDB User:', email);
+      console.log('Created new MongoDB User:', normEmail);
+    } else {
+      // Ensure the email in DB is always standardized to lowercase
+      if (user.email !== normEmail) {
+        user.email = normEmail;
+        await user.save();
+      }
     }
+
+    // Auto-heal unlimited pass if verified payment exists in PaymentModel
+    if (!user.isUnlimited) {
+      const verifiedPayment = await PaymentModel.findOne({
+        userEmail: { $regex: new RegExp(`^${escapeRegex(normEmail)}$`, 'i') },
+        status: 'verified',
+        $or: [{ planId: /unlimited/ }, { credits: { $gte: 900 } }],
+      }).sort({ createdAt: -1 });
+
+      if (verifiedPayment) {
+        const purchaseDate = new Date(verifiedPayment.createdAt);
+        const expiry = new Date(purchaseDate);
+        expiry.setMonth(expiry.getMonth() + 3);
+        if (expiry.getTime() > Date.now()) {
+          user.isUnlimited = true;
+          user.unlimitedExpiry = expiry;
+          user.credits = 999;
+          await user.save();
+          console.log('Auto-healed Unlimited Pass for user:', normEmail);
+        }
+      }
+    }
+
     return user;
   } catch (err) {
     console.warn('MongoDB User sync warning:', err);
@@ -33,7 +83,9 @@ export async function getUserFromDB(email: string) {
   try {
     const conn = await connectToDatabase();
     if (!conn) return null;
-    const user = await UserModel.findOne({ email });
+    const normEmail = normalizeEmail(email);
+    if (!normEmail) return null;
+    const user = await UserModel.findOne(emailQuery(normEmail));
     return user;
   } catch (err) {
     console.warn('MongoDB getUserFromDB warning:', err);
@@ -45,7 +97,7 @@ export async function updateUserCreditStatusInDB(
   email: string,
   updateData: {
     isUnlimited?: boolean;
-    unlimitedExpiry?: string;
+    unlimitedExpiry?: string | Date;
     credits?: number;
     contributedCount?: number;
   }
@@ -54,9 +106,12 @@ export async function updateUserCreditStatusInDB(
     const conn = await connectToDatabase();
     if (!conn) return null;
 
+    const normEmail = normalizeEmail(email);
+    if (!normEmail) return null;
+
     const user = await UserModel.findOneAndUpdate(
-      { email },
-      { $set: updateData },
+      emailQuery(normEmail),
+      { $set: { ...updateData, email: normEmail } },
       { new: true, upsert: true }
     );
     return user;
@@ -71,11 +126,13 @@ export async function saveOASessionToDB(session: OASession, userEmail?: string) 
     const conn = await connectToDatabase();
     if (!conn) return null;
 
+    const normEmail = userEmail ? normalizeEmail(userEmail) : '';
+
     const doc = await OASessionModel.findOneAndUpdate(
       { sessionId: session.id },
       {
         sessionId: session.id,
-        userEmail: userEmail || '',
+        userEmail: normEmail,
         title: session.title,
         timeLimitMinutes: session.timeLimitMinutes,
         config: session.config,
@@ -124,6 +181,65 @@ export async function getOASessionFromDB(sessionId: string) {
   }
 }
 
+export async function getUserOASessionsFromDB(email: string): Promise<OASession[]> {
+  try {
+    const conn = await connectToDatabase();
+    if (!conn) return [];
+    const normEmail = normalizeEmail(email);
+    if (!normEmail) return [];
+
+    const docs = await OASessionModel.find({
+      userEmail: { $regex: new RegExp(`^${escapeRegex(normEmail)}$`, 'i') },
+    }).sort({ createdAt: -1 });
+
+    return docs.map((doc) => ({
+      id: doc.sessionId,
+      title: doc.title,
+      createdAt: doc.createdAt ? doc.createdAt.toISOString() : new Date().toISOString(),
+      startedAt: doc.startedAt ? doc.startedAt.toISOString() : new Date().toISOString(),
+      completedAt: doc.completedAt ? doc.completedAt.toISOString() : undefined,
+      timeLimitMinutes: doc.timeLimitMinutes,
+      config: doc.config,
+      questions: doc.questions,
+      submissions: doc.submissions || {},
+      totalScore: doc.totalScore,
+      maxScore: doc.maxScore,
+      status: doc.status,
+    })) as OASession[];
+  } catch (err) {
+    console.warn('MongoDB getUserOASessionsFromDB warning:', err);
+    return [];
+  }
+}
+
+export async function getUserContributedQuestionsFromDB(email: string) {
+  try {
+    const conn = await connectToDatabase();
+    if (!conn) return [];
+    const normEmail = normalizeEmail(email);
+    if (!normEmail) return [];
+
+    const docs = await QuestionModel.find({
+      contributedBy: { $regex: new RegExp(`^${escapeRegex(normEmail)}$`, 'i') },
+    }).sort({ createdAt: -1 });
+
+    return docs.map((q) => ({
+      id: String(q.questionId),
+      title: q.title,
+      difficulty: q.difficulty,
+      tags: q.tags || [],
+      problemDescription: q.problemDescription,
+      testCases: q.inputOutput || [],
+      edgeCases: q.edgeCases || [],
+      starterCode: q.starterCode,
+      submittedAt: q.createdAt ? q.createdAt.toISOString() : new Date().toISOString(),
+    }));
+  } catch (err) {
+    console.warn('MongoDB getUserContributedQuestionsFromDB warning:', err);
+    return [];
+  }
+}
+
 export async function recordPaymentToDB(data: {
   orderId: string;
   paymentId?: string;
@@ -137,9 +253,11 @@ export async function recordPaymentToDB(data: {
     const conn = await connectToDatabase();
     if (!conn) return null;
 
+    const normEmail = data.userEmail ? normalizeEmail(data.userEmail) : undefined;
+
     const payment = await PaymentModel.findOneAndUpdate(
       { orderId: data.orderId },
-      data,
+      { ...data, userEmail: normEmail },
       { upsert: true, new: true }
     );
     return payment;

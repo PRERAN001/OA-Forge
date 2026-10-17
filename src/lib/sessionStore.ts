@@ -11,27 +11,41 @@ export function getSessionServer(id: string): OASession | null | undefined {
   return globalSessions[id] ?? null;
 }
 
-// Client-side local storage helpers
-const STORAGE_KEY = 'roundzero_oa_sessions';
+// Client-side local storage helpers (strictly scoped to user email to prevent leakage)
+if (typeof window !== 'undefined') {
+  try {
+    // Purge legacy global key that leaked assessments across accounts
+    localStorage.removeItem('roundzero_oa_sessions');
+  } catch {}
+}
+
+function getStorageKey(userEmail?: string): string {
+  if (userEmail) {
+    return `roundzero_oa_sessions_${encodeURIComponent(userEmail.toLowerCase().trim())}`;
+  }
+  return 'roundzero_oa_guest_sessions';
+}
 
 export function saveSessionLocal(session: OASession): void {
   if (typeof window === 'undefined') return;
   try {
-    const existingStr = localStorage.getItem(STORAGE_KEY);
+    const key = getStorageKey(session.userEmail);
+    const existingStr = localStorage.getItem(key);
     const sessions: Record<string, OASession> = existingStr
       ? JSON.parse(existingStr)
       : {};
     sessions[session.id] = session;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+    localStorage.setItem(key, JSON.stringify(sessions));
   } catch (e) {
     console.error('Failed to save session to localStorage', e);
   }
 }
 
-export function getSessionLocal(id: string): OASession | undefined {
+export function getSessionLocal(id: string, userEmail?: string): OASession | undefined {
   if (typeof window === 'undefined') return undefined;
   try {
-    const existingStr = localStorage.getItem(STORAGE_KEY);
+    const key = getStorageKey(userEmail);
+    const existingStr = localStorage.getItem(key);
     if (!existingStr) return undefined;
     const sessions: Record<string, OASession> = JSON.parse(existingStr);
     return sessions[id];
@@ -41,10 +55,11 @@ export function getSessionLocal(id: string): OASession | undefined {
   }
 }
 
-export function getAllSessionsLocal(): OASession[] {
+export function getAllSessionsLocal(userEmail?: string): OASession[] {
   if (typeof window === 'undefined') return [];
   try {
-    const existingStr = localStorage.getItem(STORAGE_KEY);
+    const key = getStorageKey(userEmail);
+    const existingStr = localStorage.getItem(key);
     if (!existingStr) return [];
     const sessions: Record<string, OASession> = JSON.parse(existingStr);
     return Object.values(sessions).sort(

@@ -11,14 +11,18 @@ export async function POST(request: NextRequest) {
   try {
     const authSession = await getServerSession(authOptions);
 
+    let email: string | undefined = undefined;
+    let hasUnlimited = false;
+    let remainingCredits = 1;
+
     if (authSession?.user?.email) {
-      const email = authSession.user.email;
+      email = authSession.user.email.toLowerCase().trim();
       let user = await getUserFromDB(email);
       if (!user) {
         user = await syncUserWithMongoDB(email, authSession.user.name || undefined);
       }
 
-      let hasUnlimited = !!(user?.isUnlimited && (!user.unlimitedExpiry || new Date(user.unlimitedExpiry).getTime() > Date.now()));
+      hasUnlimited = !!(user?.isUnlimited && (!user.unlimitedExpiry || new Date(user.unlimitedExpiry).getTime() > Date.now()));
 
       if (!hasUnlimited) {
         try {
@@ -47,7 +51,9 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      if (user && !hasUnlimited && (user.credits ?? 1) <= 0) {
+      remainingCredits = user?.credits ?? 1;
+
+      if (!hasUnlimited && remainingCredits <= 0) {
         return NextResponse.json(
           { error: 'You have 0 OA credits remaining. Purchase ₹99 Unlimited Pass or contribute 3 questions to unlock!' },
           { status: 402 }
@@ -55,9 +61,10 @@ export async function POST(request: NextRequest) {
       }
 
       // Deduct 1 credit from user account if not unlimited
-      if (user && !hasUnlimited) {
+      if (!hasUnlimited) {
+        remainingCredits = Math.max(0, remainingCredits - 1);
         await updateUserCreditStatusInDB(email, {
-          credits: Math.max(0, (user.credits ?? 1) - 1),
+          credits: remainingCredits,
         });
       }
     }
@@ -108,6 +115,7 @@ export async function POST(request: NextRequest) {
       timeLimitMinutes: config.timeLimitMinutes || 60,
       config,
       questions: selectedQuestions,
+      userEmail: email,
       submissions: {},
       totalScore: 0,
       maxScore,
@@ -115,11 +123,24 @@ export async function POST(request: NextRequest) {
     };
 
     saveSessionServer(session);
-    await saveOASessionToDB(session);
+    await saveOASessionToDB(session, email);
+
+    // Provide client-safe questions (only sample test cases up to 3)
+    const clientSafeQuestions = selectedQuestions.map((q) => ({
+      ...q,
+      inputOutput: (q.inputOutput || []).slice(0, 3),
+    }));
+
+    const clientSession: OASession = {
+      ...session,
+      questions: clientSafeQuestions,
+    };
 
     return NextResponse.json({
       sessionId: session.id,
-      session,
+      session: clientSession,
+      remainingCredits: hasUnlimited ? 999 : remainingCredits,
+      isUnlimited: hasUnlimited,
     });
   } catch (error: any) {
     console.error('Error creating OA session:', error);

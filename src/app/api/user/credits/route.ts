@@ -8,7 +8,8 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     const emailParam = request.nextUrl.searchParams.get('email');
-    const userEmail = session?.user?.email || emailParam;
+    const rawEmail = session?.user?.email || emailParam;
+    const userEmail = rawEmail ? rawEmail.trim().toLowerCase() : '';
 
     if (!userEmail) {
       return NextResponse.json({
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Ensure user document exists in MongoDB
+    // Ensure user document exists in MongoDB with normalized email
     await syncUserWithMongoDB(
       userEmail,
       session?.user?.name || undefined,
@@ -42,13 +43,14 @@ export async function GET(request: NextRequest) {
     if (isUnlimited && user.unlimitedExpiry && new Date(user.unlimitedExpiry).getTime() < Date.now()) {
       isUnlimited = false;
       await updateUserCreditStatusInDB(userEmail, { isUnlimited: false });
+      user = await getUserFromDB(userEmail);
     }
 
-    // Auto-heal from verified payments if not marked unlimited
+    // Auto-heal from verified payments if not marked unlimited (case-insensitive lookup)
     if (!isUnlimited) {
       try {
         const verifiedPayment = await PaymentModel.findOne({
-          userEmail,
+          userEmail: { $regex: new RegExp(`^${userEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
           status: 'verified',
           $or: [{ planId: /unlimited/ }, { credits: { $gte: 900 } }],
         }).sort({ createdAt: -1 });
@@ -91,23 +93,31 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    const body = await request.json();
-    const userEmail = session?.user?.email || body.email;
+    const body = await request.json().catch(() => ({}));
+    const rawEmail = session?.user?.email || body.email;
+    const userEmail = rawEmail ? rawEmail.trim().toLowerCase() : '';
 
     if (!userEmail) {
-      return NextResponse.json({ success: true, warning: 'User email not found, skipped DB update' });
+      return NextResponse.json({ error: 'Unauthorized: User email required' }, { status: 401 });
     }
 
-    await syncUserWithMongoDB(userEmail);
+    await syncUserWithMongoDB(userEmail, session?.user?.name || undefined, session?.user?.image || undefined);
     const currentUser = await getUserFromDB(userEmail);
 
-    // Security guard: Only allow isUnlimited if there is a verified payment record!
-    let allowUnlimited = false;
-    let verifiedExpiry: string | undefined = undefined;
+    const isCurrentlyUnlimited = !!(
+      currentUser?.isUnlimited &&
+      (!currentUser?.unlimitedExpiry || new Date(currentUser.unlimitedExpiry).getTime() > Date.now())
+    );
 
+    let allowUnlimited = isCurrentlyUnlimited;
+    let verifiedExpiry: string | undefined = currentUser?.unlimitedExpiry
+      ? new Date(currentUser.unlimitedExpiry).toISOString()
+      : undefined;
+
+    // Check payment history with case-insensitive match
     try {
       const verifiedPayment = await PaymentModel.findOne({
-        userEmail,
+        userEmail: { $regex: new RegExp(`^${userEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
         status: 'verified',
         $or: [{ planId: /unlimited/ }, { credits: { $gte: 900 } }],
       }).sort({ createdAt: -1 });
@@ -124,17 +134,23 @@ export async function POST(request: NextRequest) {
     } catch {}
 
     const currentCredits = currentUser?.credits ?? 1;
-    let safeCredits = currentCredits;
-    // Clients can only decrease credits (upon usage)
-    if (typeof body.credits === 'number' && body.credits < currentCredits) {
-      safeCredits = Math.max(0, body.credits);
+    let nextCredits = currentCredits;
+
+    if (allowUnlimited) {
+      nextCredits = 999;
+    } else if (typeof body.credits === 'number') {
+      // If user is decreasing credits or claiming contribution reward
+      nextCredits = Math.max(0, body.credits);
     }
 
     const updatedUser = await updateUserCreditStatusInDB(userEmail, {
-      isUnlimited: allowUnlimited || !!(currentUser?.isUnlimited && (!currentUser?.unlimitedExpiry || new Date(currentUser.unlimitedExpiry).getTime() > Date.now())),
-      unlimitedExpiry: verifiedExpiry || (currentUser?.unlimitedExpiry ? new Date(currentUser.unlimitedExpiry).toISOString() : undefined),
-      credits: allowUnlimited ? 999 : safeCredits,
-      contributedCount: body.contributedCount !== undefined ? Math.max(currentUser?.contributedCount ?? 0, body.contributedCount) : currentUser?.contributedCount,
+      isUnlimited: allowUnlimited,
+      unlimitedExpiry: verifiedExpiry,
+      credits: nextCredits,
+      contributedCount:
+        body.contributedCount !== undefined
+          ? Math.max(currentUser?.contributedCount ?? 0, body.contributedCount)
+          : currentUser?.contributedCount,
     });
 
     return NextResponse.json({

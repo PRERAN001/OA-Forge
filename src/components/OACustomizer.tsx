@@ -173,14 +173,20 @@ export default function OACustomizer() {
       return;
     }
 
-    // Check & Deduct OA Credit (if not unlimited)
+    // Check OA Credit before initiating request (if not unlimited)
     const userState = getUserCredits();
     const hasUnlimited =
       userState.isUnlimited &&
       (!userState.unlimitedExpiry || new Date(userState.unlimitedExpiry).getTime() > Date.now());
 
-    if (!hasUnlimited) {
-      const creditCheck = useOACredit(session?.user?.email || undefined);
+    if (!hasUnlimited && userState.credits <= 0) {
+      setShowNoCreditsModal(true);
+      return;
+    }
+
+    // Deduct local credit only for unauthenticated guest sessions (logged in users are deducted atomically on the server)
+    if (!hasUnlimited && !session?.user?.email) {
+      const creditCheck = useOACredit();
       if (!creditCheck.success) {
         setShowNoCreditsModal(true);
         return;
@@ -210,9 +216,17 @@ export default function OACustomizer() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.error || 'Failed to create OA session');
+        if (res.status === 402) {
+          setShowNoCreditsModal(true);
+        } else {
+          alert(data.error || 'Failed to create OA session');
+        }
         setIsCreating(false);
         return;
+      }
+
+      if (session?.user?.email) {
+        fetchUserCreditsFromDB(session.user.email);
       }
 
       if (data.session) {

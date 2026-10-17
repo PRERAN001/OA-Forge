@@ -7,7 +7,6 @@ import {
   getUserCredits,
   fetchUserCreditsFromDB,
   submitQuestionContribution,
-  getContributedQuestions,
   ContributedQuestion,
 } from '@/lib/userCredits';
 import DifficultyBadge from '@/components/DifficultyBadge';
@@ -75,16 +74,35 @@ export default function ContributePage() {
 
   const { data: session } = useSession();
 
+  const loadContributions = async () => {
+    if (!session?.user?.email) {
+      setRecentContributions([]);
+      return;
+    }
+    try {
+      const res = await fetch('/api/user/contributions');
+      if (res.ok) {
+        const data = await res.json();
+        setRecentContributions(data.questions || []);
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     const update = () => {
       const userState = getUserCredits();
       setTotalContributed(userState.contributedCount);
       setCredits(userState.credits);
-      setRecentContributions(getContributedQuestions());
     };
     update();
 
-    fetchUserCreditsFromDB(session?.user?.email || undefined).then(update);
+    if (session?.user?.email) {
+      fetchUserCreditsFromDB(session.user.email).then(update);
+      loadContributions();
+    } else {
+      setRecentContributions([]);
+    }
+
     window.addEventListener('roundzero_credits_updated', update);
     return () => window.removeEventListener('roundzero_credits_updated', update);
   }, [session?.user?.email]);
@@ -170,7 +188,7 @@ export default function ContributePage() {
       const userState = getUserCredits();
       setTotalContributed(userState.contributedCount);
       setCredits(userState.credits);
-      setRecentContributions(getContributedQuestions());
+      loadContributions();
 
       if (res.creditsEarned > 0) {
         setSuccessReward(

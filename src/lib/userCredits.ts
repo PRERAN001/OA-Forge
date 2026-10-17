@@ -14,10 +14,12 @@ export interface UserCreditsState {
   }>;
 }
 
-// Clean up any legacy sensitive credit keys from localStorage to prevent tampering
+// Clean up any legacy sensitive keys from localStorage to prevent tampering and cross-account leaks
 if (typeof window !== 'undefined') {
   try {
     localStorage.removeItem('roundzero_user_credits_v1');
+    localStorage.removeItem('roundzero_oa_sessions');
+    localStorage.removeItem('roundzero_contributed_questions_v1');
   } catch {}
 }
 
@@ -37,6 +39,26 @@ let inMemoryCreditsState: UserCreditsState = {
     },
   ],
 };
+
+export function resetCreditsInMemory(): void {
+  inMemoryCreditsState = {
+    credits: 1,
+    contributedCount: 0,
+    isUnlimited: false,
+    history: [
+      {
+        id: 'init_' + Date.now(),
+        type: 'free_initial',
+        amount: 1,
+        description: 'Initial Free Assessment Credit',
+        timestamp: new Date().toISOString(),
+      },
+    ],
+  };
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('roundzero_credits_updated'));
+  }
+}
 
 export function getUserCredits(): UserCreditsState {
   // Auto-expire unlimited pass if expired
@@ -231,13 +253,7 @@ export interface ContributedQuestion {
 }
 
 export function getContributedQuestions(): ContributedQuestion[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(CONTRIBUTIONS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch (e) {
-    return [];
-  }
+  return [];
 }
 
 export async function submitQuestionContributionAsync(

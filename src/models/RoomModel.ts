@@ -21,7 +21,7 @@ export interface IRoom extends Document {
 
 const RoomMemberSchema = new Schema<IRoomMember>(
   {
-    email: { type: String, required: true },
+    email: { type: String, required: true, lowercase: true, trim: true },
     name: { type: String },
     joinedAt: { type: Date, default: Date.now },
     sessionId: { type: String },
@@ -33,7 +33,7 @@ const RoomSchema: Schema<IRoom> = new Schema(
   {
     roomId: { type: String, required: true, unique: true, index: true },
     inviteCode: { type: String, unique: true, sparse: true, index: true, uppercase: true, trim: true },
-    creatorEmail: { type: String, required: true, index: true },
+    creatorEmail: { type: String, required: true, index: true, lowercase: true, trim: true },
     title: { type: String, required: true },
     members: [RoomMemberSchema],
     oaConfig: { type: Schema.Types.Mixed },

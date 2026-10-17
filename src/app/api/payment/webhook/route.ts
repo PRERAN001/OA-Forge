@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import PaymentModel from '@/models/PaymentModel';
+import { updateUserCreditStatusInDB, normalizeEmail } from '@/lib/dbServices';
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,15 +29,36 @@ export async function POST(request: NextRequest) {
 
     switch (event.event) {
       case 'payment.captured':
-        console.log('Razorpay Payment Captured:', event.payload.payment.entity.id);
-        break;
+      case 'order.paid': {
+        const orderEntity = event.payload?.order?.entity;
+        const paymentEntity = event.payload?.payment?.entity;
+        const orderId = orderEntity?.id || paymentEntity?.order_id;
+        const paymentId = paymentEntity?.id;
 
-      case 'order.paid':
-        console.log('Razorpay Order Paid:', event.payload.order.entity.id);
+        if (orderId) {
+          const payment = await PaymentModel.findOne({ orderId });
+          if (payment && payment.userEmail) {
+            payment.status = 'verified';
+            if (paymentId) payment.paymentId = paymentId;
+            await payment.save();
+
+            const normEmail = normalizeEmail(payment.userEmail);
+            if (normEmail) {
+              const expiry = new Date();
+              expiry.setMonth(expiry.getMonth() + 3);
+              await updateUserCreditStatusInDB(normEmail, {
+                isUnlimited: true,
+                unlimitedExpiry: expiry.toISOString(),
+                credits: 999,
+              });
+            }
+          }
+        }
         break;
+      }
 
       case 'payment.failed':
-        console.log('Razorpay Payment Failed:', event.payload.payment.entity.id);
+        console.log('Razorpay Payment Failed:', event.payload?.payment?.entity?.id);
         break;
 
       default:
