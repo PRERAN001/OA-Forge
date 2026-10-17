@@ -1,17 +1,20 @@
-import { withAuth } from 'next-auth/middleware';
+import { withAuth } from "next-auth/middleware";
 
-export default withAuth({
+const authProxy = withAuth({
   pages: {
-    signIn: '/',
+    signIn: "/",
   },
   callbacks: {
     authorized({ req, token }) {
       // The public root route renders LandingPage for signed-out visitors.
-      if (req.nextUrl.pathname === '/') return true;
+      if (req.nextUrl.pathname === "/") return true;
       return !!token;
     },
   },
 });
+
+export const proxy = authProxy;
+export default authProxy;
 
 export const config = {
   matcher: [
@@ -19,10 +22,10 @@ export const config = {
      * Match all request paths except:
      * - /auth/signin (Sign-in page)
      * - /api/auth/* (NextAuth API routes)
-    * - /api/user/credits (JSON API handles its own unauthenticated response)
+     * - /api/user/credits (JSON API handles its own unauthenticated response)
      * - /privacy, /terms, /refund-policy, /shipping-policy, /contact, /about (Merchant legal info)
      * - _next/static, _next/image, favicon.ico (Static assets)
      */
-    '/((?!auth/signin|login|api/auth|api/user/credits|privacy|terms|refund-policy|shipping-policy|contact|about|_next/static|_next/image|favicon.ico).*)',
+    "/((?!auth/signin|login|api/auth|api/user/credits|privacy|terms|refund-policy|shipping-policy|contact|about|_next/static|_next/image|favicon.ico).*)",
   ],
 };
