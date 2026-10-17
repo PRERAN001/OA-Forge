@@ -12,7 +12,7 @@ export function getSessionServer(id: string): OASession | null | undefined {
 }
 
 // Client-side local storage helpers
-const STORAGE_KEY = 'aura_oa_sessions';
+const STORAGE_KEY = 'roundzero_oa_sessions';
 
 export function saveSessionLocal(session: OASession): void {
   if (typeof window === 'undefined') return;

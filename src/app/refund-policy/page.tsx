@@ -12,7 +12,7 @@ export default function RefundPolicyPage() {
         <section className="space-y-2">
           <h2 className="text-base font-bold text-white">1. Refund Eligibility</h2>
           <p>
-            Because CodeSprint delivers instant digital access to assessment credits and dataset questions, credit purchases are generally non-refundable once an assessment has been initiated using the purchased credits.
+            Because RoundZero delivers instant digital access to assessment credits and dataset questions, credit purchases are generally non-refundable once an assessment has been initiated using the purchased credits.
           </p>
         </section>
 

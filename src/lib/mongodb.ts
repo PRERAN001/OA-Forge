@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/aura_oa';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/roundzero_oa';
 
 interface MongooseCache {
   conn: typeof mongoose | null;

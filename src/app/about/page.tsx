@@ -5,7 +5,7 @@ export default function AboutPage() {
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-10 space-y-8 text-zinc-300">
       <div className="border-b border-[#383838] pb-4 space-y-1">
-        <h1 className="text-2xl sm:text-3xl font-bold text-white">About CodeSprint</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-white">About RoundZero</h1>
         <p className="text-xs text-zinc-400">
           The ultimate technical online assessment mock platform powered by authentic algorithm problem dataset.
         </p>
@@ -15,7 +15,7 @@ export default function AboutPage() {
         <section className="space-y-3">
           <h2 className="text-base font-bold text-white">Our Mission</h2>
           <p>
-            CodeSprint was built to give software engineers, university students, and job seekers an authentic, distraction-free environment to prepare for top-tier company online assessments (OAs).
+            RoundZero was built to give software engineers, university students, and job seekers an authentic, distraction-free environment to prepare for top-tier company online assessments (OAs).
           </p>
         </section>
 

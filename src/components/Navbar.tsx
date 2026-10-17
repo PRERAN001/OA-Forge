@@ -40,10 +40,10 @@ export default function Navbar() {
     });
 
     window.addEventListener('storage', update);
-    window.addEventListener('aura_credits_updated', update);
+    window.addEventListener('roundzero_credits_updated', update);
     return () => {
       window.removeEventListener('storage', update);
-      window.removeEventListener('aura_credits_updated', update);
+      window.removeEventListener('roundzero_credits_updated', update);
     };
   }, [pathname, session?.user?.email, status]);
 
@@ -65,16 +65,12 @@ export default function Navbar() {
     <header className="sticky top-0 z-40 w-full border-b border-[#383838] bg-[#1a1a1a]">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5 transition opacity-90 hover:opacity-100">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ffa116] font-bold text-[#1a1a1a] shadow-sm">
-            <Zap className="h-4 w-4 text-[#1a1a1a]" fill="currentColor" />
-          </div>
+          
           <div className="flex items-center gap-2">
             <span className="text-base font-bold tracking-tight text-white">
-              Code<span className="text-[#ffa116] font-semibold">Sprint</span>
+              Round<span className="text-[#ffa116] font-semibold">Zero</span>
             </span>
-            <span className="rounded bg-[#282828] px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 uppercase tracking-wider border border-[#383838] hidden sm:inline-block">
-              Question Bank Engine
-            </span>
+            
           </div>
         </Link>
 
@@ -135,7 +131,7 @@ export default function Navbar() {
                 </div>
               )}
               <button
-                onClick={() => signOut({ callbackUrl: '/auth/signin' })}
+                onClick={() => signOut({ callbackUrl: '/' })}
                 className="p-1 rounded text-zinc-400 hover:text-rose-400 hover:bg-[#282828] transition"
                 title="Sign Out"
               >
@@ -144,7 +140,7 @@ export default function Navbar() {
             </div>
           ) : (
             <button
-              onClick={() => signIn('google')}
+              onClick={() => signIn('google', { callbackUrl: '/' })}
               className="flex items-center gap-1.5 rounded-lg border border-[#383838] bg-[#282828] px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-[#383838] transition"
             >
               <User className="h-3.5 w-3.5" />

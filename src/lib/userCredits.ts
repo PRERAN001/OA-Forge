@@ -17,11 +17,11 @@ export interface UserCreditsState {
 // Clean up any legacy sensitive credit keys from localStorage to prevent tampering
 if (typeof window !== 'undefined') {
   try {
-    localStorage.removeItem('aura_user_credits_v1');
+    localStorage.removeItem('roundzero_user_credits_v1');
   } catch {}
 }
 
-const CONTRIBUTIONS_STORAGE_KEY = 'aura_contributed_questions_v1';
+const CONTRIBUTIONS_STORAGE_KEY = 'roundzero_contributed_questions_v1';
 
 let inMemoryCreditsState: UserCreditsState = {
   credits: 1,
@@ -77,7 +77,7 @@ export async function fetchUserCreditsFromDB(email?: string): Promise<UserCredit
         }
 
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new Event('aura_credits_updated'));
+          window.dispatchEvent(new Event('roundzero_credits_updated'));
         }
       }
     } else if (!contentType.includes('application/json')) {
@@ -109,7 +109,7 @@ export async function saveUserCredits(state: UserCreditsState, email?: string): 
         contributedCount: state.contributedCount,
       }),
     });
-    window.dispatchEvent(new Event('aura_credits_updated'));
+    window.dispatchEvent(new Event('roundzero_credits_updated'));
   } catch (e) {
     console.error('Failed to save credits state to DB:', e);
   }

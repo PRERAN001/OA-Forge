@@ -9,7 +9,7 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'mock_google_client_secret',
     }),
   ],
-  secret: process.env.NEXTAUTH_SECRET || 'aura_oa_nextauth_secret_key_2026',
+  secret: process.env.NEXTAUTH_SECRET || 'roundzero_oa_nextauth_secret_key_2026',
   pages: {
     signIn: '/auth/signin',
   },

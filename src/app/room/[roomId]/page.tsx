@@ -58,8 +58,14 @@ export default function RoomPage({
 }) {
   const { roomId } = use(params);
   const router = useRouter();
-  const { data: authSession } = useSession();
+  const { data: authSession, status: authStatus } = useSession();
   const myEmail = authSession?.user?.email ?? '';
+
+  useEffect(() => {
+    if (authStatus === 'unauthenticated') {
+      router.replace('/');
+    }
+  }, [authStatus, router]);
 
   const [room, setRoom] = useState<RoomData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -184,8 +190,8 @@ export default function RoomPage({
         remainingCredits: current.remainingCredits,
       });
     };
-    window.addEventListener('aura_credits_updated', onCreditsUpdated);
-    return () => window.removeEventListener('aura_credits_updated', onCreditsUpdated);
+    window.addEventListener('roundzero_credits_updated', onCreditsUpdated);
+    return () => window.removeEventListener('roundzero_credits_updated', onCreditsUpdated);
   }, []);
 
   // Load stats for config panel
@@ -377,7 +383,7 @@ export default function RoomPage({
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/" className="font-bold text-sm hover:opacity-90 transition" style={{ color: ORANGE }}>
-              OA-Forge
+              RoundZero
             </Link>
             <span className="text-white/20">/</span>
             <span className="text-sm text-white/60">Room</span>

@@ -74,7 +74,7 @@ export default function RazorpayPayButton({
           key: orderData.keyId || 'rzp_test_key',
           amount: orderData.amount, // in paise
           currency: orderData.currency || 'INR',
-          name: 'OA-Forge',
+          name: 'RoundZero',
           description: `Payment for ${planName}`,
           image: 'https://cdn-icons-png.flaticon.com/512/9322/9322127.png',
           order_id: orderData.id,

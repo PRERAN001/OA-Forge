@@ -17,11 +17,9 @@ export default function Footer() {
           {/* Col 1: Brand */}
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded bg-[#ffa116] font-bold text-[#1a1a1a]">
-                <Zap className="h-3.5 w-3.5 text-[#1a1a1a]" fill="currentColor" />
-              </div>
+              
               <span className="font-bold text-white text-sm">
-                Code<span className="text-[#ffa116]">Sprint</span>
+                Round<span className="text-[#ffa116]">Zero</span>
               </span>
             </div>
             <p className="text-zinc-400 text-xs leading-relaxed">
@@ -118,7 +116,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-[#383838] pt-6 flex flex-col sm:flex-row items-center justify-between text-[11px] text-zinc-500 font-mono gap-3">
-          <span>© {new Date().getFullYear()} CodeSprint. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} RoundZero. All rights reserved.</span>
           <span>Razorpay Merchant Onboarding Ready</span>
         </div>
       </div>

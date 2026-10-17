@@ -6,9 +6,25 @@ import {
   DrawablyHighlight,
 } from "drawably/react";
 import Link from "next/link";
+import { signIn } from "next-auth/react";
 import { useEffect, useState } from "react";
 
 const ORANGE = "#ff9f0a";
+
+function getSignInCallbackUrl(): string {
+  if (typeof window === "undefined") return "/";
+
+  const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl");
+  if (!callbackUrl) return "/";
+
+  try {
+    const url = new URL(callbackUrl, window.location.origin);
+    if (url.origin !== window.location.origin) return "/";
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "/";
+  }
+}
 
 export default function LandingPage() {
   const [questions, setQuestions] = useState(0);
@@ -186,9 +202,10 @@ export default function LandingPage() {
 
               <div className="mt-8 flex flex-wrap gap-3">
 
-                <Link
-                  href="/login"
-                  className="group flex items-center gap-8 rounded-lg px-6 py-3.5 text-sm font-semibold text-black transition hover:brightness-110"
+                <button
+                  type="button"
+                  onClick={() => signIn('google', { callbackUrl: getSignInCallbackUrl() })}
+                  className="group flex items-center gap-8 rounded-lg px-6 py-3.5 text-sm font-semibold text-black transition hover:brightness-110 cursor-pointer"
                   style={{ backgroundColor: ORANGE }}
                 >
                   Start Solving
@@ -196,7 +213,7 @@ export default function LandingPage() {
                   <span className="transition-transform group-hover:translate-x-1">
                     →
                   </span>
-                </Link>
+                </button>
 
                 <Link
                   href="#pricing"
@@ -377,9 +394,10 @@ export default function LandingPage() {
                   </div>
 
 
-                  <Link
-                    href="/login"
-                    className="mt-5 flex items-center justify-between rounded-lg px-4 py-3 text-xs font-semibold text-black transition hover:brightness-110"
+                  <button
+                    type="button"
+                    onClick={() => signIn('google', { callbackUrl: getSignInCallbackUrl() })}
+                    className="mt-5 flex w-full items-center justify-between rounded-lg px-4 py-3 text-xs font-semibold text-black transition hover:brightness-110 cursor-pointer"
                     style={{ backgroundColor: ORANGE }}
                   >
 
@@ -391,7 +409,7 @@ export default function LandingPage() {
                       →
                     </span>
 
-                  </Link>
+                  </button>
 
                 </div>
 
@@ -526,9 +544,10 @@ export default function LandingPage() {
               </div>
 
 
-              <Link
-                href="/login"
-                className="mt-9 flex items-center justify-between rounded-lg px-5 py-4 text-sm font-semibold text-black transition hover:brightness-110"
+              <button
+                type="button"
+                onClick={() => signIn('google', { callbackUrl: getSignInCallbackUrl() })}
+                className="mt-9 flex w-full items-center justify-between rounded-lg px-5 py-4 text-sm font-semibold text-black transition hover:brightness-110 cursor-pointer"
                 style={{ backgroundColor: ORANGE }}
               >
 
@@ -540,7 +559,7 @@ export default function LandingPage() {
                   →
                 </span>
 
-              </Link>
+              </button>
 
             </div>
 
@@ -615,7 +634,8 @@ export default function LandingPage() {
               </p>
 
 
-              <button
+              <Link
+                href="/contribute"
                 className="mt-8 flex w-full items-center justify-between rounded-lg border border-white/[0.1] bg-[#191919] px-5 py-4 text-xs font-medium text-white/65 transition hover:border-[#ff9f0a]/40 hover:text-white"
               >
 
@@ -630,7 +650,7 @@ export default function LandingPage() {
                   →
                 </span>
 
-              </button>
+              </Link>
 
             </div>
 
@@ -807,11 +827,11 @@ export default function LandingPage() {
 
           <h2 className="mt-8 text-6xl font-bold tracking-[-0.06em] md:text-8xl">
 
-            Ready to
+            Ready for
             <br />
 
             <span style={{ color: ORANGE }}>
-              Sprint?
+              RoundZero?
             </span>
 
           </h2>
@@ -823,21 +843,22 @@ export default function LandingPage() {
           </p>
 
 
-          <Link
-            href="/login"
-            className="group mx-auto mt-9 flex w-fit items-center gap-10 rounded-lg px-7 py-4 text-sm font-semibold text-black transition hover:brightness-110"
+          <button
+            type="button"
+            onClick={() => signIn('google', { callbackUrl: getSignInCallbackUrl() })}
+            className="group mx-auto mt-9 flex w-fit items-center gap-10 rounded-lg px-7 py-4 text-sm font-semibold text-black transition hover:brightness-110 cursor-pointer"
             style={{ backgroundColor: ORANGE }}
           >
 
             <span>
-              Enter CodeSprint
+              Enter RoundZero
             </span>
 
             <span className="text-lg transition-transform group-hover:translate-x-1">
               →
             </span>
 
-          </Link>
+          </button>
 
 
           <div className="mt-6 font-serif text-sm italic text-white/20">
@@ -853,25 +874,7 @@ export default function LandingPage() {
           FOOTER
       ========================================================= */}
 
-      <footer className="border-t border-white/[0.07] px-5 py-7 lg:px-10">
-
-        <div className="mx-auto flex max-w-[1500px] flex-col justify-between gap-4 md:flex-row">
-
-          <div className="text-sm font-bold">
-            Code<span style={{ color: ORANGE }}>Sprint</span>
-          </div>
-
-          <div className="font-mono text-[9px] text-white/20">
-            2,800+ QUESTIONS // ₹99 / 3 MONTHS // UNLIMITED OAs
-          </div>
-
-          <div className="font-mono text-[9px] text-white/20">
-            © 2026 CODESPRINT
-          </div>
-
-        </div>
-
-      </footer>
+      
 
     </main>
   );

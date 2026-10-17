@@ -12,7 +12,7 @@ export default function PrivacyPolicyPage() {
         <section className="space-y-2">
           <h2 className="text-base font-bold text-white">1. Information We Collect</h2>
           <p>
-            We collect information you provide directly to us when using CodeSprint, including when you create an account, customize online assessments, purchase credit passes via Razorpay, or submit question contributions.
+            We collect information you provide directly to us when using RoundZero, including when you create an account, customize online assessments, purchase credit passes via Razorpay, or submit question contributions.
           </p>
           <ul className="list-disc pl-5 space-y-1 text-zinc-400">
             <li>Personal identifiers (Name, Email Address).</li>

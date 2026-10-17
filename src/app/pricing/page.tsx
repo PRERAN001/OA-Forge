@@ -39,8 +39,8 @@ export default function PricingPage() {
       syncUserCreditsWithDB(session.user.email).then(update);
     }
 
-    window.addEventListener('aura_credits_updated', update);
-    return () => window.removeEventListener('aura_credits_updated', update);
+    window.addEventListener('roundzero_credits_updated', update);
+    return () => window.removeEventListener('roundzero_credits_updated', update);
   }, [session?.user?.email]);
 
   const plan = {

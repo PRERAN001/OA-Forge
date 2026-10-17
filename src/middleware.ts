@@ -2,7 +2,7 @@ import { withAuth } from 'next-auth/middleware';
 
 export default withAuth({
   pages: {
-    signIn: '/auth/signin',
+    signIn: '/',
   },
   callbacks: {
     authorized({ req, token }) {
@@ -23,6 +23,6 @@ export const config = {
      * - /privacy, /terms, /refund-policy, /shipping-policy, /contact, /about (Merchant legal info)
      * - _next/static, _next/image, favicon.ico (Static assets)
      */
-    '/((?!auth/signin|api/auth|api/user/credits|privacy|terms|refund-policy|shipping-policy|contact|about|_next/static|_next/image|favicon.ico).*)',
+    '/((?!auth/signin|login|api/auth|api/user/credits|privacy|terms|refund-policy|shipping-policy|contact|about|_next/static|_next/image|favicon.ico).*)',
   ],
 };

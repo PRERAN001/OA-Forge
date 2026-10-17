@@ -1,14 +1,22 @@
 'use client';
 
-import { Suspense, useState } from 'react';
-import { signIn } from 'next-auth/react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useState, useEffect } from 'react';
+import { signIn, useSession } from 'next-auth/react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Zap, Lock, ShieldCheck } from 'lucide-react';
 
 function SignInContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const { status } = useSession();
   const callbackUrl = searchParams.get('callbackUrl') || '/';
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      router.replace(callbackUrl);
+    }
+  }, [status, callbackUrl, router]);
 
   const handleGoogleSignIn = () => {
     setIsLoading(true);
@@ -24,7 +32,7 @@ function SignInContent() {
             <Zap className="h-6 w-6 text-[#1a1a1a]" fill="currentColor" />
           </div>
           <h1 className="text-2xl font-extrabold text-white tracking-tight">
-            Sign in to Code<span className="text-[#ffa116]">Sprint</span>
+            Sign in to Round<span className="text-[#ffa116]">Zero</span>
           </h1>
           <p className="text-xs text-zinc-400 max-w-xs leading-relaxed">
             Access algorithm questions, assessment generator, code execution console, and scoring tools.

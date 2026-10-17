@@ -16,10 +16,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'CodeSprint - Online Technical Assessment Platform',
+  title: 'RoundZero - Online Technical Assessment Platform',
   description:
     'Customize algorithm questions, difficulty levels, topic tags, points, and randomized mock assessments powered by authentic dataset (2,800+ questions).',
-  
 };
 
 export default function RootLayout({

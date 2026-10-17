@@ -12,7 +12,7 @@ export default function TermsPage() {
         <section className="space-y-2">
           <h2 className="text-base font-bold text-white">1. Acceptance of Terms</h2>
           <p>
-            By accessing or using CodeSprint, you agree to be bound by these Terms and Conditions. If you do not agree, please do not use our services.
+            By accessing or using RoundZero, you agree to be bound by these Terms and Conditions. If you do not agree, please do not use our services.
           </p>
         </section>
 

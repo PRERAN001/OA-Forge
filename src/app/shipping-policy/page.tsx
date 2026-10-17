@@ -12,7 +12,7 @@ export default function ShippingPolicyPage() {
         <section className="space-y-2">
           <h2 className="text-base font-bold text-white">1. Digital Service Delivery</h2>
           <p>
-            CodeSprint provides online digital assessment software and dataset access. We do not ship physical products.
+            RoundZero provides online digital assessment software and dataset access. We do not ship physical products.
           </p>
         </section>
 

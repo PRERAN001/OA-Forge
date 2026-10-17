@@ -177,7 +177,7 @@ function JoinRoomContent() {
             href="/"
             className="text-xs text-white/40 hover:text-white transition"
           >
-            ← Back to OA-Forge
+            ← Back to RoundZero
           </Link>
         </div>
       </div>
