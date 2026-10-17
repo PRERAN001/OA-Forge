@@ -1,13 +1,9 @@
 
 "use client";
 
-<<<<<<< HEAD
-import { signIn } from "next-auth/react";
-import { resetCreditsInMemory } from "@/lib/userCredits";
-=======
 import { signIn, useSession } from "next-auth/react";
 import { useEffect } from "react";
->>>>>>> 5b936cf0f17ea5a32d9a9105b0bb32a03ff2994a
+import { resetCreditsInMemory } from "@/lib/userCredits";
 
 export default function GoogleSignInButton() {
   const { update } = useSession();
