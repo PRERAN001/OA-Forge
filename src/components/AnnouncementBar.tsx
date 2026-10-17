@@ -1,44 +1,26 @@
-"use client"; // needed if you're on the Next.js App Router
+"use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 type Props = {
-  /** Unique id per announcement. Change it when you post a new one so it shows again. */
-  id: string;
   message: string;
   /** Optional link, e.g. "/changelog" */
   href?: string;
   linkText?: string;
-  /** Let users close the bar (remembered in localStorage). Default: true */
+  /** Let users close the bar for the current page view. Default: true */
   dismissible?: boolean;
 };
 
 export default function AnnouncementBar({
-  id,
   message,
   href,
   linkText = "Learn more",
   dismissible = true,
 }: Props) {
-  const storageKey = `announcement-dismissed:${id}`;
-  // Start hidden, decide after mount. This avoids a server/client hydration mismatch.
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    try {
-      setVisible(localStorage.getItem(storageKey) !== "1");
-    } catch {
-      setVisible(true); // storage blocked (private mode etc.), just show it
-    }
-  }, [storageKey]);
+  const [visible, setVisible] = useState(true);
 
   const dismiss = () => {
     setVisible(false);
-    try {
-      localStorage.setItem(storageKey, "1");
-    } catch {
-      /* ignore */
-    }
   };
 
   if (!visible) return null;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
@@ -24,6 +24,8 @@ export default function Navbar() {
 
   const [credits, setCredits] = useState<number | null>(null);
   const [isUnlimited, setIsUnlimited] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const update = () => {
@@ -48,6 +50,33 @@ export default function Navbar() {
     };
   }, [pathname, session?.user?.email, status]);
 
+  useEffect(() => {
+    if (!isProfileOpen) {
+      return;
+    }
+
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (
+        profileRef.current &&
+        !profileRef.current.contains(event.target as Node)
+      ) {
+        setIsProfileOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsProfileOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isProfileOpen]);
+
   const isOAActive =
     pathname.startsWith("/oa/") && !pathname.includes("/results/");
 
@@ -66,7 +95,6 @@ export default function Navbar() {
   return (
     <>
       <AnnouncementBar
-        id="launch-oct-2026"
         message="Rooms are live. Invite your team by Code."
         href="/changelog"
         linkText="See what's new"
@@ -130,25 +158,65 @@ export default function Navbar() {
 
             {/* User Profile / Auth State */}
             {status === "authenticated" && session?.user ? (
-              <div className="flex items-center gap-2 pl-2 border-l border-[#383838]">
-                {session.user.image ? (
-                  <img
-                    src={session.user.image}
-                    alt={session.user.name || "User"}
-                    className="h-7 w-7 rounded-full border border-[#ffa116]/40 object-cover"
-                  />
-                ) : (
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#282828] border border-[#383838] text-xs font-bold text-[#ffa116]">
-                    {session.user.name?.[0] || "U"}
+              <div ref={profileRef} className="relative border-l border-[#383838] pl-2">
+                <button
+                  type="button"
+                  onClick={() => setIsProfileOpen((open) => !open)}
+                  className="flex items-center gap-2 rounded-lg p-1 transition hover:bg-[#282828]"
+                  aria-expanded={isProfileOpen}
+                  aria-haspopup="dialog"
+                  aria-label="Open profile menu"
+                >
+                  {session.user.image ? (
+                    <img
+                      src={session.user.image}
+                      alt={session.user.name || "User"}
+                      className="h-7 w-7 rounded-full border border-[#ffa116]/40 object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-[#383838] bg-[#282828] text-xs font-bold text-[#ffa116]">
+                      {session.user.name?.[0] || "U"}
+                    </div>
+                  )}
+                </button>
+
+                {isProfileOpen && (
+                  <div
+                    role="dialog"
+                    aria-label="Profile information"
+                    className="absolute right-0 top-11 z-50 w-64 rounded-xl border border-[#383838] bg-[#1f1f1f] p-4 shadow-2xl"
+                  >
+                    <div className="flex items-center gap-3">
+                      {session.user.image ? (
+                        <img
+                          src={session.user.image}
+                          alt={session.user.name || "User"}
+                          className="h-12 w-12 rounded-full border border-[#ffa116]/40 object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#383838] bg-[#282828] text-lg font-bold text-[#ffa116]">
+                          {session.user.name?.[0] || "U"}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-white">
+                          {session.user.name || "RoundZero user"}
+                        </p>
+                        <p className="truncate text-xs text-zinc-400">
+                          {session.user.email || "No email available"}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => signOut({ callbackUrl: "/" })}
+                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-[#383838] px-3 py-2 text-xs font-semibold text-zinc-300 transition hover:border-rose-400/40 hover:bg-rose-400/10 hover:text-rose-300"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Sign Out
+                    </button>
                   </div>
                 )}
-                <button
-                  onClick={() => signOut({ callbackUrl: "/" })}
-                  className="p-1 rounded text-zinc-400 hover:text-rose-400 hover:bg-[#282828] transition"
-                  title="Sign Out"
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
               </div>
             ) : (
               <GoogleSignInButton />
