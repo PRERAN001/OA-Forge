@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useSession, signOut, signIn } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { getUserCredits, fetchUserCreditsFromDB } from '@/lib/userCredits';
+import GoogleSignInButton from './GoogleSignInButton';
 import {
   Zap,
   BookOpen,
@@ -14,7 +15,6 @@ import {
   CreditCard,
   Sparkles,
   LogOut,
-  User,
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -139,13 +139,7 @@ export default function Navbar() {
               </button>
             </div>
           ) : (
-            <button
-              onClick={() => signIn('google', { callbackUrl: '/' })}
-              className="flex items-center gap-1.5 rounded-lg border border-[#383838] bg-[#282828] px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-[#383838] transition"
-            >
-              <User className="h-3.5 w-3.5" />
-              Sign In
-            </button>
+            <GoogleSignInButton />
           )}
         </div>
       </div>
