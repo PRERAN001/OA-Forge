@@ -46,7 +46,7 @@ export default function AnnouncementBar({
   return (
     <div
       role="status"
-      className="relative flex items-center justify-center gap-3 bg-orange-500 px-10 py-2 text-center text-sm font-medium text-black"
+      className="relative flex items-center justify-center gap-3 bg-[#ffa116] px-10 py-2 text-center text-sm font-medium text-black"
     >
       <p className="leading-snug">
         {message}
